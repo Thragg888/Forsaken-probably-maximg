@@ -1,0 +1,577 @@
+repeat task.wait() until game:IsLoaded()
+
+-- ============ SPLASH (unchanged) ============
+local function showSplash()
+    local TweenService = game:GetService("TweenService")
+    local PlayerGui    = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "SlashsakenSplash"; gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true; gui.DisplayOrder = 999999; gui.Parent = PlayerGui
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1,0,1,0); bg.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    bg.BackgroundTransparency = 1; bg.BorderSizePixel = 0; bg.Parent = gui
+    local card = Instance.new("Frame")
+    card.AnchorPoint = Vector2.new(0.5,0.5); card.Position = UDim2.new(0.5,0,0.5,0)
+    card.Size = UDim2.new(0,340,0,230); card.BackgroundColor3 = Color3.fromRGB(18,18,24)
+    card.BackgroundTransparency = 1; card.BorderSizePixel = 0; card.Parent = gui
+    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0,12); corner.Parent = card
+    local stroke = Instance.new("UIStroke"); stroke.Color = Color3.fromRGB(220,50,50)
+    stroke.Thickness = 2; stroke.Transparency = 1; stroke.Parent = card
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new{ ColorSequenceKeypoint.new(0, Color3.fromRGB(30,30,40)), ColorSequenceKeypoint.new(1, Color3.fromRGB(15,15,22)) }
+    grad.Rotation = 90; grad.Parent = card
+    local img1 = Instance.new("ImageLabel")
+    img1.AnchorPoint = Vector2.new(1,0.5); img1.Position = UDim2.new(0.5,-6,0.38,0)
+    img1.Size = UDim2.new(0,110,0,110); img1.BackgroundTransparency = 1
+    img1.Image = "rbxassetid://130582019929746"; img1.ImageTransparency = 1
+    img1.ScaleType = Enum.ScaleType.Fit; img1.Parent = card
+    local img2 = Instance.new("ImageLabel")
+    img2.AnchorPoint = Vector2.new(0,0.5); img2.Position = UDim2.new(0.5,6,0.38,0)
+    img2.Size = UDim2.new(0,110,0,110); img2.BackgroundTransparency = 1
+    img2.Image = "rbxassetid://76765831712854"; img2.ImageTransparency = 1
+    img2.ScaleType = Enum.ScaleType.Fit; img2.Parent = card
+    local title = Instance.new("TextLabel")
+    title.AnchorPoint = Vector2.new(0.5,0.5); title.Position = UDim2.new(0.5,0,0.82,0)
+    title.Size = UDim2.new(1,-20,0,26); title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamBold; title.TextSize = 18
+    title.TextColor3 = Color3.fromRGB(255,255,255); title.TextTransparency = 1
+    title.Text = "Loading Slashsaken..."; title.Parent = card
+    pcall(function() game:GetService("ContentProvider"):PreloadAsync({"rbxassetid://130582019929746","rbxassetid://76765831712854"}) end)
+    local IN  = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local OUT = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    TweenService:Create(bg,IN,{BackgroundTransparency=0.35}):Play()
+    TweenService:Create(card,IN,{BackgroundTransparency=0.03}):Play()
+    TweenService:Create(stroke,IN,{Transparency=0}):Play()
+    TweenService:Create(img1,IN,{ImageTransparency=0}):Play()
+    TweenService:Create(img2,IN,{ImageTransparency=0}):Play()
+    TweenService:Create(title,IN,{TextTransparency=0}):Play()
+    task.delay(2.4, function()
+        pcall(function()
+            title.Text = "Slashsaken Loaded!"
+            title.TextColor3 = Color3.fromRGB(120,255,120)
+            stroke.Color = Color3.fromRGB(120,255,120)
+        end)
+        TweenService:Create(bg,OUT,{BackgroundTransparency=1}):Play()
+        TweenService:Create(card,OUT,{BackgroundTransparency=1}):Play()
+        TweenService:Create(stroke,OUT,{Transparency=1}):Play()
+        TweenService:Create(img1,OUT,{ImageTransparency=1}):Play()
+        TweenService:Create(img2,OUT,{ImageTransparency=1}):Play()
+        TweenService:Create(title,OUT,{TextTransparency=1}):Play()
+        task.delay(0.5, function() pcall(function() gui:Destroy() end) end)
+    end)
+end
+showSplash()
+
+-- ============ RAYFIELD GEN 2 LOADER (with retry + fallback) ============
+local Rayfield
+local RAYFIELD_URLS = {
+    "https://sirius.menu/rayfield",
+    "https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua",
+}
+do
+    local ok, err
+    for attempt = 1, 5 do
+        for _, url in ipairs(RAYFIELD_URLS) do
+            ok, err = pcall(function()
+                local src = game:HttpGet(url, true)
+                local fn = loadstring(src)
+                assert(type(fn) == "function", "loadstring returned nil (bad source from "..url..")")
+                local mod = fn()
+                assert(type(mod) == "table", "module is not a table (executor likely can't follow redirect)")
+                Rayfield = mod
+            end)
+            if ok and type(Rayfield) == "table" then break end
+            warn(("[Slashsaken] Rayfield load attempt %d via %s failed: %s"):format(attempt, url, tostring(err)))
+        end
+        if ok and type(Rayfield) == "table" then break end
+        task.wait(1)
+    end
+    if type(Rayfield) ~= "table" then
+        local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+        if PlayerGui then
+            local sg = Instance.new("ScreenGui"); sg.Name = "SlashsakenError"
+            sg.ResetOnSpawn = false; sg.DisplayOrder = 999999; sg.Parent = PlayerGui
+            local f = Instance.new("Frame")
+            f.AnchorPoint = Vector2.new(0.5,0.5); f.Position = UDim2.new(0.5,0,0.5,0)
+            f.Size = UDim2.new(0,360,0,120); f.BackgroundColor3 = Color3.fromRGB(30,0,0)
+            f.BorderSizePixel = 0; f.Parent = sg
+            local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,10); c.Parent = f
+            local t = Instance.new("TextLabel")
+            t.Size = UDim2.new(1,-20,1,-20); t.Position = UDim2.new(0,10,0,10)
+            t.BackgroundTransparency = 1; t.TextColor3 = Color3.new(1,1,1)
+            t.Font = Enum.Font.GothamMedium; t.TextSize = 14; t.TextWrapped = true
+            t.Text = "Slashsaken: Failed to load Rayfield Gen 2 after 5 attempts. sirius.menu may be down, or your executor cannot follow the 302 redirect. Try a different executor (Delta/Fluxus/Wave)."
+            t.Parent = f
+        end
+        error("[Slashsaken] Rayfield load failed: " .. tostring(err))
+    end
+end
+
+-- ============ SERVICES & STATE ============
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService        = game:GetService("RunService")
+local Players           = game:GetService("Players")
+local lp                = Players.LocalPlayer
+local PlayerGui         = lp:WaitForChild("PlayerGui")
+local Workspace         = game:GetService("Workspace")
+local Lighting          = game:GetService("Lighting")
+local TextChatService   = game:GetService("TextChatService")
+local UserInputService  = game:GetService("UserInputService")
+local testRemote        = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+
+local wallCheckEnabled       = false
+local facingCheckEnabled     = true
+local customFacingDot        = 0.3
+local killerCirclesVisible   = false
+local facingVisualOn         = false
+local autoBlockOn            = true
+local autoBlockAudioOn       = false
+local detectionRange         = 18
+local messageWhenAutoBlockOn = false
+local messageWhenAutoBlock   = ""
+
+local hitboxDraggingTech     = false
+local _hitboxDraggingDebounce = false
+local Dspeed                 = 8
+local Ddelay                 = 0
+local HDT_DURATION           = 1.5
+local BLOCK_COOLDOWN         = 27
+local BLOCK_FIRE_INTERVAL    = 0.2
+local lastBlockFireTime      = 0
+local blockCooldownUntil     = 0
+
+local MyAnimLockOn           = false
+local AIM_WINDOW             = 0.8
+local predictionValue        = 4
+local aimPunchToggles        = { ["Character Lock"] = false, ["Camera Lock"] = false }
+local autoPunchEventEnabled  = false
+local autoblockToggles       = { ["Block"] = true, ["Charge"] = false, ["Clone"] = false }
+
+local _lastBlockMessageTime  = 0
+local MESSAGE_BLOCK_COOLDOWN = 0.6
+local _blockPrevPlaying      = {}
+
+local flickProtectionEnabled  = false
+local flickRange              = 15
+local flickDegPerSecThreshold = 500
+local flickWindow             = 0.25
+local flickData               = {}
+
+local lastM1Time              = 0
+local _lastM1Detection        = 0
+local M1_RECOVERY             = 0.4
+local m1LockoutEnabled        = true
+
+local killerAutoParryEnabled    = false
+local killerParryAnimIds        = {}
+local killerParryRange          = 15
+local killerParryDelay          = 0
+local killerParryCooldown       = 1.0
+local killerParryLastTime       = 0
+local killerParryVisualOn       = true
+local killerParryRangeVisual    = nil
+local killerParryTrackSeen      = setmetatable({}, { __mode = "k" })
+local killerParryLastStatusTime = 0
+
+local aimState = { Enabled=false, AimMode="Camera", Smooth=0.35, Debug=false, PredictMode="Both", PredictLead=0.15, PingMultiplier=1.0 }
+local aimAbilityAnimIds  = {}
+local aimAbilitySoundIds = {}
+local aimCurrentAbility  = nil
+local aimEventRefCount   = 0
+local aimEventActive     = false
+local aimTargetHRP       = nil
+
+local noliConfig       = nil
+local noliVoidRushMode = "Off"
+local controllableDashEnabled = false
+
+local autoGenEnabled         = false
+local autoGenCooldown        = 4
+local autoGenSpeedUp         = false
+local autoGenFixing          = false
+local autoGenRNG             = Random.new()
+local autoGenCurrentGrid     = 6
+local autoGenGridOverride    = false
+local autoGenGridSize        = 6
+local autoGenOverlayTemplate = nil
+local hideCompletedGens      = true
+
+-- CONSTANTS (same as before)
+local PARRY_KEYWORDS = { "slash","flintlock","one shot","oneshot","one-shot","hatchet","parry" }
+local AIM_KEYWORDS   = { "slash","parry punch","one shot","oneshot","gun explosion","sacrificial dagger","backstab","hatchet" }
+local AIM_PING_KEYWORDS = { "gun explosion" }
+local HARDCODED_KILLER_PARRY_ANIMS = { "116618003477002","111918351126361","108018357044094","83745199070305","133491532453922","90499469533503","72722244508749","96959123077498","95802026624883","140671644163156","100926346851492" }
+local GUEST_PARRY_ANIMS = { "72722244508749","96959123077498","95802026624883","140671644163156","100926346851492" }
+local blockAnimIds = { "72722244508749","96959123077498","95802026624883","140671644163156","100926346851492" }
+local punchAnimIds = { "87259391926321","99100240941590","72685103823181","81905101227053","113936304594883","140703210927645","136007065400978","129843313690921","86709774283672","108807732150251","138040001965654","86096387000557","119850211147676","131696603025265","119462383658044","116618003477002","133491532453922","76649505662612","71190646367497" }
+
+local autoBlockTriggerSounds = {}
+for _, id in ipairs({
+    "102228729296384","140242176732868","112809109188560","136323728355613","115026634746636",
+    "84116622032112","108907358619313","127793641088496","86174610237192","95079963655241",
+    "101199185291628","119942598489800","84307400688050","105200830849301","75330693422988",
+    "82221759983649","81702359653578","108610718831698","112395455254818","109431876587852",
+    "109348678063422","85853080745515","12222216","105840448036441","114742322778642",
+    "119583605486352","79980897195554","71805956520207","79391273191671","89004992452376",
+    "101553872555606","101698569375359","106300477136129","116581754553533","117231507259853",
+    "119089145505438","121954639447247","125213046326879","131406927389838","86833981571073",
+    "110372418055226","86494585504534","80516583309685","140412278320643","117173212095661",
+    "140194172008986","85544168523099","114506382930939","99829427721752","120059928759346",
+    "104625283622511","105316545074913","126131675979001","82336352305186","93366464803829",
+    "84069821282466","128856426573270","128195973631079","124903763333174","94317217837143",
+    "98111231282218","136728245733659","107444859834748","76959687420003","72425554233832",
+    "96594507550917","139996647355899","107345261604889","127557531826290","108651070773439",
+    "74842815979546","124397369810639","76467993976301","118493324723683","5148302439",
+    "98675142200448","128367348686124","103684883268194","109246041199659","80540530406270",
+    "139523195429581","105204810054381","116468089135195","133709029886490","124234993291213",
+    "98733709078792","99856718263455","74809026448465","99215225043220","79612713897495",
+}) do autoBlockTriggerSounds[id] = true end
+
+local autoBlockTriggerAnims = {
+    "114506382930939","127245564598429","99829427721752","138938529389204","111647315359080",
+    "92567970681901","124269076578545","94958041603347","109667959938617","130958529065375",
+    "118298475669935","126830014841198","18885909645","98456918873918","105458270463374",
+    "83829782357897","125403313786645","82113744478546","70371667919898","99135633258223",
+    "7167027849946","109230267448394","126996426760253","106538427162796","122709416391891",
+    "90620531468240","91509234639766","99824350842479","126171487400618","101101433684051",
+    "106860049270347","70483423693126","126727756047566","137642639873297","77375846492436",
+    "121293883585738","81639435858902","137314737492715","92173139187970","108196996477620",
+    "90819435118493","123172382755876",
+}
+
+local killerState       = {}
+local soundHooks        = {}
+local soundBlockedUntil = {}
+local detectionCircles  = {}
+local facingVisuals     = {}
+local m1ActiveByKiller  = {}
+
+local NOLI_VOID_RUSH_DEFAULTS = { InitialTurnDuration = 1.5, TurnSpeed = 1, InitialTurnMult = 6.6 }
+local NOLI_MODES = {
+    Subtle = { InitialTurnDuration = 1.20, TurnSpeed = 20,    InitialTurnMult = 10   },
+    Smooth = { InitialTurnDuration = 0.60, TurnSpeed = 500,   InitialTurnMult = 100  },
+    Car    = { InitialTurnDuration = 0.01, TurnSpeed = 10000, InitialTurnMult = 1000 },
+}
+
+-- (All helper functions from your script go here verbatim:
+--  getMyKillerName, isLocalPlayerKiller, isHelpless, isM1LockedOut,
+--  getKillersFolder, getNearestKillerModel, getKillerHRP, getSurvivorCharacters,
+--  fireKillerAbility, isSupportedKiller, abilityForKiller, updateKillerParryAnims,
+--  setKillerParryLastLabel -> WILL BE REPLACED WITH PARAGRAPH REFS BELOW,
+--  setKillerParryStatus -> same,
+--  nameMatchesParryKeyword, findConfigKey, applyNoliVoidRush,
+--  getFacingCircleInfo, isInBlockZone, isKillerFlicking, beginDragIntoKiller,
+--  fireRemoteBlock, fireRemoteCharge, fireRemoteClone, isBlockOnCooldown,
+--  sendChatMessage, hasLineOfSight, refreshUIRefs, refreshAnimator,
+--  addFacingVisual, removeFacingVisual, addKillerCircle, removeKillerCircle,
+--  extractNumericSoundId, getSoundWorldPosition, getCharacterFromDescendant,
+--  _attemptForSound, hookSound, StartInvisibility, StopInvisibility,
+--  ESP helpers, generator systems, etc.)
+
+-- ============ RAYFIELD WINDOW ============
+local Window = Rayfield:CreateWindow({
+    Name = "Slashsaken [Beta]",
+    LoadingTitle = "Slashsaken",
+    LoadingSubtitle = "By viltrumite",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "Slashsaken",
+        FileName = "SlashsakenConfig",
+    },
+    KeySystem = false,
+    DisableRayfieldPrompts = true,
+    DisableBuildWarnings  = true,
+})
+
+-- ============ TABS (Rayfield uses icon asset IDs) ============
+local Tabs = {
+    Esp        = Window:CreateTab("Esp",          4483362458),
+    Stam       = Window:CreateTab("Stam",         4483362458),
+    AutoBlock  = Window:CreateTab("Auto Block",   4483362458),
+    FacingChk  = Window:CreateTab("Facing Check", 4483362458),
+    Notice     = Window:CreateTab("Notice",       4483362458),
+    AutoPunch  = Window:CreateTab("Auto Punch",   4483362458),
+    Aim        = Window:CreateTab("Aim",          4483362458),
+    Tech       = Window:CreateTab("Techs",        4483362458),
+    Killer     = Window:CreateTab("Killer",       4483362458),
+    Gen        = Window:CreateTab("Generator",    4483362458),
+    Misc       = Window:CreateTab("Misc",         4483362458),
+    UI         = Window:CreateTab("UI Settings",  4483362458),
+}
+
+-- ============ ESP TAB ============
+Tabs.Esp:CreateSection("Players")
+Tabs.Esp:CreateToggle({ Name="Killer ESP",    CurrentValue=false, Flag="ESP_Killer",   Callback=function(v) espKillerActive=v   end })
+Tabs.Esp:CreateToggle({ Name="Survivors ESP", CurrentValue=false, Flag="ESP_Survivor", Callback=function(v) espSurvivorActive=v end })
+Tabs.Esp:CreateSection("Items & Gens")
+Tabs.Esp:CreateToggle({ Name="Medkit ESP", Default=false, Flag="ESP_Medkit", Callback=function(v)
+    espMedkitActive=v; if v then scanItems("Medkit") else medkitHighlights=clearList(medkitHighlights) end
+end })
+Tabs.Esp:CreateToggle({ Name="BloxyCola ESP", Default=false, Flag="ESP_Bloxy", Callback=function(v)
+    espBloxyActive=v; if v then scanItems("BloxyCola") else bloxyHighlights=clearList(bloxyHighlights) end
+end })
+Tabs.Esp:CreateToggle({ Name="Generators ESP", Default=false, Flag="ESP_Generators", Callback=function(v) espGeneratorsActive=v; espDoGenerators(v) end })
+Tabs.Esp:CreateToggle({ Name="Hide Completed Generators", Default=true, Flag="ESP_HideCompleted", Callback=function(v) hideCompletedGens=v end })
+
+-- ============ STAM TAB ============
+Tabs.Stam:CreateSection("Stamina")
+Tabs.Stam:CreateToggle({ Name="Infinite Stamina", Default=false, Flag="InfStamina", Callback=function(v)
+    if v then setStamina() else infinityStaminaActive=false; if staminaThread then task.cancel(staminaThread); staminaThread=nil end end
+end })
+Tabs.Stam:CreateSlider({ Name="Max Stamina", Range={1,1000}, Increment=1, CurrentValue=maxStaminaValue, Flag="MaxStaminaSlider", Callback=function(v) maxStaminaValue=v; sprintModule.MaxStamina=v end })
+Tabs.Stam:CreateSlider({ Name="Sprint Speed", Range={1,30}, Increment=1, CurrentValue=sprintSpeedValue, Flag="SprintSpeedSlider", Callback=function(v) sprintSpeedValue=v; sprintModule.SprintSpeed=v end })
+Tabs.Stam:CreateSection("Advanced")
+Tabs.Stam:CreateSlider({ Name="Stamina Gain", Range={1,1000}, Increment=1, CurrentValue=staminaGainValue, Flag="StaminaGainSlider", Callback=function(v) staminaGainValue=v; sprintModule.StaminaGain=v end })
+Tabs.Stam:CreateSlider({ Name="Stamina Drain", Range={0,1000}, Increment=1, CurrentValue=staminaDrainValue, Flag="StaminaDrainSlider", Callback=function(v) staminaDrainValue=v; sprintModule.StaminaDrain=v end })
+Tabs.Stam:CreateSlider({ Name="Regen Delay", Range={0,10}, Increment=0.1, CurrentValue=regenDelayValue, Flag="RegenDelaySlider", Callback=function(v) regenDelayValue=v; sprintModule.StaminaRegenDelay=v end })
+
+-- ============ AUTO BLOCK TAB ============
+Tabs.AutoBlock:CreateSection("Auto Block")
+Tabs.AutoBlock:CreateToggle({ Name="Auto Block", Default=true, Flag="AB_CircleBlock", Callback=function(v) autoBlockOn=v end })
+Tabs.AutoBlock:CreateToggle({ Name="Auto Block (Sound React)", Default=false, Flag="AB_AudioOn", Callback=function(v) autoBlockAudioOn=v end })
+Tabs.AutoBlock:CreateToggle({ Name="Ghost Block", Default=false, Flag="AB_GhostBlock", Callback=function(v) if v then StartInvisibility() else StopInvisibility() end end })
+Tabs.AutoBlock:CreateInput({ Name="Detection Range (studs)", CurrentValue="18", PlaceholderText="18", Flag="AB_DetectRange", RemoveTextAfterFocusLost=false, Callback=function(v) detectionRange=tonumber(v) or 18 end })
+Tabs.AutoBlock:CreateToggle({ Name="M1 Recovery Lockout", Default=true, Flag="AB_M1Lockout", Callback=function(v) m1LockoutEnabled=v end })
+Tabs.AutoBlock:CreateInput({ Name="M1 Recovery Duration (s)", CurrentValue="0.4", PlaceholderText="0.4", Flag="AB_M1Recovery", RemoveTextAfterFocusLost=false, Callback=function(v) M1_RECOVERY=tonumber(v) or 0.4 end })
+Tabs.AutoBlock:CreateSection("Modes")
+Tabs.AutoBlock:CreateToggle({ Name="Auto Block (Guest 1337)", Default=true, Flag="AB_BlockMode", Callback=function(v) autoblockToggles["Block"]=v end })
+Tabs.AutoBlock:CreateToggle({ Name="Auto Clone (007n7)", Default=false, Flag="AB_CloneMode", Callback=function(v) autoblockToggles["Clone"]=v end })
+Tabs.AutoBlock:CreateToggle({ Name="Message When Blocking", Default=false, Flag="AB_MsgWhenBlock", Callback=function(v) messageWhenAutoBlockOn=v end })
+Tabs.AutoBlock:CreateInput({ Name="The message", CurrentValue="", PlaceholderText="Block", Flag="AB_BlockMsg", RemoveTextAfterFocusLost=false, Callback=function(v) messageWhenAutoBlock=v end })
+
+-- ============ FACING CHECK TAB ============
+Tabs.FacingChk:CreateSection("Facing")
+Tabs.FacingChk:CreateToggle({ Name="Facing Check (forward circle only)", Default=true, Flag="AB_FacingCheck", Callback=function(v)
+    facingCheckEnabled=v
+    if v then local folder=getKillersFolder(); if folder then for _,k in ipairs(folder:GetChildren()) do addFacingVisual(k) end end end
+end })
+Tabs.FacingChk:CreateToggle({ Name="Facing Visual (yellow/red/green)", Default=true, Flag="AB_FacingVisual", Callback=function(v)
+    facingVisualOn=v; local folder=getKillersFolder()
+    if folder then for _,k in ipairs(folder:GetChildren()) do if v then addFacingVisual(k) else removeFacingVisual(k) end end end
+end })
+Tabs.FacingChk:CreateToggle({ Name="Giant Circle Visual (auto-block range)", Default=false, Flag="AB_DetectVisual", Callback=function(v)
+    killerCirclesVisible=v; local folder=getKillersFolder()
+    if folder then for _,k in ipairs(folder:GetChildren()) do if v then addKillerCircle(k) else removeKillerCircle(k) end end end
+end })
+Tabs.FacingChk:CreateInput({ Name="Facing DOT (0.3 = 72°, higher = tighter)", CurrentValue="0.3", PlaceholderText="0.3", Flag="AB_FacingDot", RemoveTextAfterFocusLost=false, Callback=function(v)
+    customFacingDot=tonumber(v) or 0.3
+    for killer,visual in pairs(facingVisuals) do
+        local hrp=killer:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local center,radius=getFacingCircleInfo(hrp)
+            visual.Radius=radius; visual.Height=0.12
+            visual.CFrame=CFrame.new(0,-(hrp.Size.Y/2+0.05),-(center-hrp.Position).Magnitude)*CFrame.Angles(math.rad(90),0,0)
+        end
+    end
+end })
+Tabs.FacingChk:CreateToggle({ Name="Wall Check", Default=false, Flag="AB_WallCheck", Callback=function(v) wallCheckEnabled=v end })
+Tabs.FacingChk:CreateSection("Flick Protection")
+Tabs.FacingChk:CreateToggle({ Name="Enable Flick Protection", Default=false, Flag="FP_On", Callback=function(v) flickProtectionEnabled=v end })
+Tabs.FacingChk:CreateInput({ Name="Flick Range (studs)", CurrentValue="15", PlaceholderText="15", Flag="FP_Range", RemoveTextAfterFocusLost=false, Callback=function(v) flickRange=tonumber(v) or 15 end })
+Tabs.FacingChk:CreateInput({ Name="Flick Threshold (deg/s)", CurrentValue="500", PlaceholderText="500", Flag="FP_Threshold", RemoveTextAfterFocusLost=false, Callback=function(v) flickDegPerSecThreshold=tonumber(v) or 500 end })
+Tabs.FacingChk:CreateInput({ Name="Flick Window (s)", CurrentValue="0.25", PlaceholderText="0.25", Flag="FP_Window", RemoveTextAfterFocusLost=false, Callback=function(v) flickWindow=tonumber(v) or 0.25 end })
+
+-- ============ NOTICE TAB ============
+Tabs.Notice:CreateSection("Info")
+Tabs.Notice:CreateParagraph({
+    Title = "Slashsaken [Beta] — By viltrumite",
+    Content = "• Auto Block — instant, 27s cd + 0.2s anti-spam\n• Facing Circle — yellow/red/green (M1 detected)\n• HDT — survivor only, shares 27s cd with Block\n• Killer Auto-Parry — 404Error / RagingPace\n• Aim — own ability via ID OR name\n• Noli Void Rush — Subtle / Smooth / Car\n• Generator — full ForsakenPlus auto-gen system",
+})
+
+-- ============ AUTO PUNCH TAB ============
+Tabs.AutoPunch:CreateSection("Auto Punch")
+Tabs.AutoPunch:CreateToggle({ Name="Auto Punch", Default=false, Flag="AP_AutoPunch", Callback=function(v) autoPunchEventEnabled=v end })
+Tabs.AutoPunch:CreateToggle({ Name="Aimbot (aim during your punch)", Default=false, Flag="AP_Aimbot", Callback=function(v) MyAnimLockOn=v end })
+Tabs.AutoPunch:CreateInput({ Name="Aim Lock Duration", CurrentValue="0.8", PlaceholderText="0.8", Flag="AP_AimDur", RemoveTextAfterFocusLost=false, Callback=function(v) AIM_WINDOW=tonumber(v) or 0.8 end })
+Tabs.AutoPunch:CreateSection("Aim Lock Modes")
+Tabs.AutoPunch:CreateToggle({ Name="Character Lock", Default=true, Flag="AP_CharLock", Callback=function(v) aimPunchToggles["Character Lock"]=v end })
+Tabs.AutoPunch:CreateToggle({ Name="Camera Lock", Default=false, Flag="AP_CamLock", Callback=function(v) aimPunchToggles["Camera Lock"]=v end })
+
+-- ============ AIM TAB ============
+Tabs.Aim:CreateSection("Aim")
+Tabs.Aim:CreateToggle({ Name="Enable Aim", Default=false, Flag="AIM_Enabled", Callback=function(v) aimState.Enabled=v end })
+Tabs.Aim:CreateToggle({ Name="Debug (print matches)", Default=false, Flag="AIM_Debug", Callback=function(v) aimState.Debug=v end })
+local AIM_InfoPara = Tabs.Aim:CreateParagraph({ Title="Detecting survivor assets...", Content="" })
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local nA,nS=0,0
+        for _ in pairs(aimAbilityAnimIds) do nA+=1 end
+        for _ in pairs(aimAbilitySoundIds) do nS+=1 end
+        local char=lp.Character
+        local name=char and (char:GetAttribute("CharacterName") or char.Name) or "?"
+        pcall(function() AIM_InfoPara:Set({Title=name.." — "..nA.." anim / "..nS.." sound loaded", Content=""}) end)
+    end
+end)
+Tabs.Aim:CreateSection("Tuning")
+Tabs.Aim:CreateDropdown({ Name="Aim Mode", Options={"Camera","HRP","HRP+Camera"}, CurrentOption="Camera", Flag="AIM_Mode", Callback=function(v) aimState.AimMode=v end })
+Tabs.Aim:CreateSlider({ Name="Smoothness", Range={0.05,1}, Increment=0.05, CurrentValue=0.35, Flag="AIM_Smooth", Callback=function(v) aimState.Smooth=v end })
+Tabs.Aim:CreateDropdown({ Name="Prediction", Options={"Off","Ping","Velocity","Both"}, CurrentOption="Both", Flag="AIM_Predict", Callback=function(v) aimState.PredictMode=v end })
+Tabs.Aim:CreateSlider({ Name="Velocity Lead (s)", Range={0,0.5}, Increment=0.05, CurrentValue=0.15, Flag="AIM_Lead", Callback=function(v) aimState.PredictLead=v end })
+Tabs.Aim:CreateSlider({ Name="Ping Multiplier (Gun Explosion)", Range={0,2}, Increment=0.1, CurrentValue=1.0, Flag="AIM_Ping", Callback=function(v) aimState.PingMultiplier=v end })
+
+-- ============ TECHS TAB ============
+Tabs.Tech:CreateSection("HDT")
+Tabs.Tech:CreateToggle({ Name="HDT (walk into killer on block)", Default=false, Flag="HDT_On", Callback=function(v) hitboxDraggingTech=v end })
+Tabs.Tech:CreateSlider({ Name="HDT Duration", Range={0.1,5}, Increment=0.1, Suffix="s", CurrentValue=1.5, Flag="HDT_Duration", Callback=function(v) HDT_DURATION=tonumber(v) or 1.5 end })
+Tabs.Tech:CreateInput({ Name="Walk speed (studs/s)", CurrentValue="8", PlaceholderText="8", Flag="HDT_Speed", RemoveTextAfterFocusLost=false, Callback=function(v) Dspeed=tonumber(v) or 8 end })
+Tabs.Tech:CreateInput({ Name="Delay before walk (0 = instant)", CurrentValue="0", PlaceholderText="0", Flag="HDT_Delay", RemoveTextAfterFocusLost=false, Callback=function(v) Ddelay=tonumber(v) or 0 end })
+local HDT_CooldownPara = Tabs.Tech:CreateParagraph({ Title="Cooldown: Ready", Content="" })
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local remaining = BLOCK_COOLDOWN - (tick() - lastBlockFireTime)
+        if lastBlockFireTime > 0 and remaining > 0 and remaining <= BLOCK_COOLDOWN then
+            pcall(function() HDT_CooldownPara:Set({Title=string.format("Cooldown: %.1fs", remaining), Content=""}) end)
+        else
+            pcall(function() HDT_CooldownPara:Set({Title="Cooldown: Ready", Content=""}) end)
+        end
+    end
+end)
+Tabs.Tech:CreateSection("Exploits")
+Tabs.Tech:CreateButton({ Name="Fake Lag Tech", Callback=function()
+    pcall(function()
+        local char=lp.Character or lp.CharacterAdded:Wait()
+        local hum=char and char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+        local anim=hum:FindFirstChildOfClass("Animator") or Instance.new("Animator",hum)
+        local a=Instance.new("Animation"); a.AnimationId="rbxassetid://136252471123500"
+        anim:LoadAnimation(a):Play()
+    end)
+end })
+
+-- ============ KILLER TAB ============
+Tabs.Killer:CreateSection("Killer Auto-Parry")
+Tabs.Killer:CreateToggle({ Name="Killer Auto-Parry", Default=false, Flag="KP_On", Callback=function(v) killerAutoParryEnabled=v end })
+Tabs.Killer:CreateInput({ Name="Circle Range (studs)", CurrentValue="15", PlaceholderText="15", Flag="KP_Range", RemoveTextAfterFocusLost=false, Callback=function(v) killerParryRange=tonumber(v) or 15 end })
+Tabs.Killer:CreateInput({ Name="Delay (0 = instant)", CurrentValue="0", PlaceholderText="0", Flag="KP_Delay", RemoveTextAfterFocusLost=false, Callback=function(v) killerParryDelay=tonumber(v) or 0 end })
+Tabs.Killer:CreateInput({ Name="Cooldown (s)", CurrentValue="1", PlaceholderText="1", Flag="KP_Cooldown", RemoveTextAfterFocusLost=false, Callback=function(v) killerParryCooldown=tonumber(v) or 1 end })
+Tabs.Killer:CreateToggle({ Name="Show Range Circle", Default=true, Flag="KP_Visual", Callback=function(v) killerParryVisualOn=v end })
+local KP_StatusPara      = Tabs.Killer:CreateParagraph({ Title="Status: Standby", Content="" })
+local KP_LastTriggerPara = Tabs.Killer:CreateParagraph({ Title="Last trigger: None", Content="" })
+
+-- replace old setKillerParryLastLabel / setKillerParryStatus with:
+local function setKillerParryLastLabel(txt) pcall(function() KP_LastTriggerPara:Set({Title="Last trigger: "..tostring(txt), Content=""}) end) end
+local function setKillerParryStatus(txt)
+    local now=tick(); if now-killerParryLastStatusTime<1 then return end
+    killerParryLastStatusTime=now
+    pcall(function() KP_StatusPara:Set({Title="Status: "..tostring(txt), Content=""}) end)
+end
+
+Tabs.Killer:CreateSection("Noli Void Rush")
+Tabs.Killer:CreateDropdown({ Name="Steering Mode", Options={"Off","Subtle","Smooth","Car"}, CurrentOption="Off", Flag="NOLI_Mode",
+    Callback=function(v)
+        noliVoidRushMode=v
+        local ok=applyNoliVoidRush(v)
+        pcall(function()
+            Rayfield:Notify({ Title="Noli Void Rush",
+                Content = ok and ("Mode set to "..v.." — applies next Noli spawn") or "Noli config not loaded (executor lacks 'require')",
+                Duration = 3, Image = 4483362458 })
+        end)
+    end })
+local NOLI_StatusPara = Tabs.Killer:CreateParagraph({ Title="Noli config: scanning...", Content="" })
+task.spawn(function()
+    while task.wait(2) do
+        pcall(function()
+            NOLI_StatusPara:Set({ Title = noliConfig and "Noli config: loaded ✓" or "Noli config: not found (executor may not support 'require')", Content = "" })
+        end)
+    end
+end)
+Tabs.Killer:CreateSection("c00lkidd Dash")
+Tabs.Killer:CreateToggle({ Name="Controllable Dash", Default=false, Flag="DASH_On", Callback=function(v) controllableDashEnabled=v end })
+
+-- ============ GENERATOR TAB ============
+Tabs.Gen:CreateSection("Auto Generator")
+Tabs.Gen:CreateToggle({ Name="Auto Generator", Default=false, Flag="GEN_Auto", Callback=function(v) autoGenEnabled=v end })
+Tabs.Gen:CreateSlider({ Name="Cooldown Between Completions", Range={1.5,8}, Increment=0.1, CurrentValue=4, Flag="GEN_Cooldown", Callback=function(v) autoGenCooldown=v end })
+Tabs.Gen:CreateToggle({ Name="Speed Up When Nobody's Near", Default=false, Flag="GEN_SpeedUp", Callback=function(v) autoGenSpeedUp=v end })
+Tabs.Gen:CreateSection("Grid Override")
+Tabs.Gen:CreateToggle({ Name="Override Grid Size", Default=false, Flag="GEN_GridOverride", Callback=function(v) autoGenGridOverride=v end })
+Tabs.Gen:CreateSlider({ Name="Grid Size", Range={4,12}, Increment=1, CurrentValue=6, Flag="GEN_GridSize", Callback=function(v) autoGenGridSize=v; autoGenCurrentGrid=v end })
+
+-- ============ MISC TAB ============
+Tabs.Misc:CreateSection("Chat & Lighting")
+Tabs.Misc:CreateButton({ Name="Chat Visibility", Callback=function()
+    if TextChatService:FindFirstChild("ChatWindowConfiguration") and TextChatService:FindFirstChild("ChatInputBarConfiguration") then
+        TextChatService.ChatWindowConfiguration.Enabled = true
+        TextChatService.ChatInputBarConfiguration.Enabled = true
+    end
+end })
+local fullbrightOriginal = {}
+Tabs.Misc:CreateToggle({ Name="Fullbright", Default=false, Flag="Misc_Fullbright", Callback=function(v)
+    if v then
+        if not fullbrightOriginal.Ambient then
+            fullbrightOriginal = { Ambient=Lighting.Ambient, OutdoorAmbient=Lighting.OutdoorAmbient, Brightness=Lighting.Brightness, ClockTime=Lighting.ClockTime }
+        end
+        Lighting.Ambient=Color3.new(1,1,1); Lighting.OutdoorAmbient=Color3.new(1,1,1)
+        Lighting.Brightness=2; Lighting.ClockTime=12
+    else
+        if fullbrightOriginal.Ambient then
+            Lighting.Ambient=fullbrightOriginal.Ambient; Lighting.OutdoorAmbient=fullbrightOriginal.OutdoorAmbient
+            Lighting.Brightness=fullbrightOriginal.Brightness; Lighting.ClockTime=fullbrightOriginal.ClockTime
+        end
+    end
+end })
+Tabs.Misc:CreateSection("Performance")
+Tabs.Misc:CreateButton({ Name="FPS Boost", Callback=function()
+    pcall(function()
+        local t=workspace:FindFirstChildOfClass("Terrain")
+        if t then t.WaterWaveSize=0; t.WaterWaveSpeed=0; t.WaterReflectance=0; t.WaterTransparency=0 end
+        Lighting.GlobalShadows=false; Lighting.FogEnd=9e9
+        for _,v in ipairs(game:GetDescendants()) do
+            if v:IsA("Part") or v:IsA("UnionOperation") or v:IsA("MeshPart") then
+                v.Material=Enum.Material.SmoothPlastic; v.Reflectance=0
+            elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency=1
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then v.Enabled=false end
+        end
+        Rayfield:Notify({Title="FPS Boost", Content="Successfully boosted FPS!", Duration=3, Image=4483362458})
+    end)
+end })
+Tabs.Misc:CreateButton({ Name="Clear Cache", Callback=function()
+    pcall(function()
+        for _,v in ipairs(workspace:GetChildren()) do
+            if v:IsA("Part") and v.Name=="AntiFlickZone" then v:Destroy() end
+        end
+        if gcinfo then collectgarbage("collect") end
+        Rayfield:Notify({Title="Cache Cleaner", Content="Cleared!", Duration=3, Image=4483362458})
+    end)
+end })
+
+-- ============ UI SETTINGS TAB ============
+Tabs.UI:CreateSection("Menu")
+Tabs.UI:CreateKeybind({ Name="Menu Keybind", CurrentKeybind="RightShift", HoldToInteract=false, Flag="MenuKeybind", Callback=function() end })
+Tabs.UI:CreateButton({ Name="Unload", Callback=function() Rayfield:Destroy() end })
+
+-- Load saved config
+pcall(function() Rayfield:LoadConfiguration() end)
+
+-- ==========================================
+-- GAME LOGIC — ALL UNCHANGED
+-- ==========================================
+-- (paste every RunService heartbeat/renderstepped block, task.spawn loop,
+--  Workspace.DescendantAdded, etc. from your original script verbatim.
+--  The only thing that changes is Rayfield notification calls:)
+--
+-- Old:
+--   Library:Notify({ Title="Auto Block", Description="...", Time=2 })
+-- New:
+--   Rayfield:Notify({ Title="Auto Block", Content="...", Duration=2, Image=4483362458 })
+--
+-- Old:
+--   Options.HDT_CooldownLabel:SetText(...)
+-- New:
+--   HDT_CooldownPara:Set({ Title=..., Content="" })
+--
+-- Old:
+--   Options.KP_Status:SetText(...) / Options.KP_LastTrigger:SetText(...)
+-- New:
+--   KP_StatusPara:Set({Title=..., Content=""}) / KP_LastTriggerPara:Set({Title=..., Content=""})
+--
+-- Old:
+--   Options.NOLI_Status:SetText(...)
+-- New:
+--   NOLI_StatusPara:Set({Title=..., Content=""})
+--
+-- Old:
+--   Options.AIM_Info:SetText(...)
+-- New:
+--   AIM_InfoPara:Set({Title=..., Content=""})
