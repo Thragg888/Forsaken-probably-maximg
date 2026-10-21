@@ -121,20 +121,20 @@ local testRemote        = ReplicatedStorage:WaitForChild("Modules"):WaitForChild
 -- STATE
 -- ============================================================
 local wallCheckEnabled       = false
-local facingCheckEnabled     = true           -- CIRCLE check
+local facingCheckEnabled     = true
 local customFacingDot        = 0.3
 local killerCirclesVisible   = false
-local facingVisualOn         = true           -- circle visual shown?
+local facingVisualOn         = true
 local autoBlockOn            = true
-local blockTriggerMode       = "Both"         -- "Anim" | "Sound" | "Both"
+local blockTriggerMode       = "Both"
 local detectionRange         = 18
 local messageWhenAutoBlockOn = false
 local messageWhenAutoBlock   = ""
 
-local boxCheckEnabled        = false          -- BOX check
+local boxCheckEnabled        = false
 local boxBlockTransparency   = 0.5
 local boxBlockSize           = 6
-local boxBlockActive         = {}             -- [killerModel] = { part, selectionBox, expireTime }
+local boxBlockActive         = {}
 
 local hitboxDraggingTech     = false
 local _hitboxDraggingDebounce = false
@@ -388,14 +388,14 @@ updateKillerParryAnims()
 
 local function setKillerParryLastLabel(txt)
     if not KP_LastTriggerPara then return end
-    pcall(function() KP_LastTriggerPara:Set({ title = "Last trigger: " .. tostring(txt), content = "" }) end)
+    pcall(function() KP_LastTriggerPara:Set({ Title = "Last trigger: " .. tostring(txt), Content = "" }) end)
 end
 local function setKillerParryStatus(txt)
     local now = tick()
     if now - killerParryLastStatusTime < 1 then return end
     killerParryLastStatusTime = now
     if not KP_StatusPara then return end
-    pcall(function() KP_StatusPara:Set({ title = "Status: " .. tostring(txt), content = "" }) end)
+    pcall(function() KP_StatusPara:Set({ Title = "Status: " .. tostring(txt), Content = "" }) end)
 end
 local function nameMatchesParryKeyword(name)
     if not name or name == "" then return false end
@@ -560,7 +560,7 @@ local function fireRemoteBlock(killer)
     lastBlockFireTime  = tick()
     blockCooldownUntil = tick() + BLOCK_COOLDOWN
     if killer then lastBlockByKiller[killer] = tick() end
-    pcall(function() Rayfield:Notify({ title = "Auto Block", content = "Block fired — 27s cooldown", duration = 2 }) end)
+    pcall(function() Rayfield:Notify({ Title = "Auto Block", Content = "Block fired — 27s cooldown", Duration = 2 }) end)
     if hitboxDraggingTech then
         task.spawn(function()
             local nearest = getNearestKillerModel()
@@ -582,7 +582,6 @@ end
 -- BOX BLOCK SYSTEM
 -- ============================================================
 local function createBoxBlockVisual(killer, hrp)
-    -- If an active box already exists for this killer, don't stack
     local existing = boxBlockActive[killer]
     if existing and existing.part and existing.part.Parent and tick() < existing.expireTime then
         return
@@ -1352,65 +1351,112 @@ lp.CharacterAdded:Connect(function()
 end)
 
 -- ============================================================
--- RAYFIELD GEN 2 WINDOW + TABS  (NO auto-save)
+-- RAYFIELD GEN 2 WINDOW + TABS  (FIXED API)
 -- ============================================================
 local Window
 do
     local ok, w = pcall(function()
         return Rayfield:CreateWindow({
-            name = "Slashsaken [Beta]",
-            subtitle = "By viltrumite",
-            sidebarLayout = true,
+            Name = "Slashsaken [Beta]",
+            LoadingTitle = "Slashsaken",
+            LoadingSubtitle = "by viltrumite",
+            Theme = "Default",
+            DisableRayfieldPrompts = false,
+            DisableBuildWarnings = false,
+            ConfigurationSaving = {
+                Enabled = true,
+                FolderName = "Slashsaken",
+                FileName = "Slashsaken",
+            },
+            KeySystem = false,
         })
     end)
     if ok and w then Window = w end
-    if not Window then error("[Slashsaken] Window creation failed") end
+    if not Window then
+        error("[Slashsaken] Window creation failed: " .. tostring(w))
+    end
 end
 
 local function makeTab(name, icon)
-    local ok, t = pcall(function() return Window:CreateTab({ name = name, icon = icon }) end)
+    local ok, t = pcall(function() return Window:CreateTab(name, icon) end)
     if not ok or not t then
         warn(("[Slashsaken] CreateTab '%s' failed: %s"):format(name, tostring(t)))
         return nil
     end
     return t
 end
-local function mkSection(tab, name) pcall(function() tab:CreateSection({ name = name }) end) end
+
+local function mkSection(tab, name)
+    pcall(function() tab:CreateSection(name) end)
+end
+
 local function mkToggle(tab, name, default, cb)
-    local ok, err = pcall(function() tab:CreateToggle({ name = name, default = default, callback = cb }) end)
+    local ok, err = pcall(function()
+        tab:CreateToggle({ Name = name, CurrentValue = default, Callback = cb })
+    end)
     if not ok then warn("[Slashsaken] Toggle '"..name.."': "..tostring(err)) end
 end
+
 local function mkSlider(tab, name, min, max, default, cb)
-    local ok = pcall(function() tab:CreateSlider({ name = name, min = min, max = max, default = default, callback = cb }) end)
-    if not ok then
-        pcall(function() tab:CreateSlider({ name = name, range = {min, max}, default = default, callback = cb }) end)
-    end
+    local ok, err = pcall(function()
+        tab:CreateSlider({
+            Name = name,
+            Range = {min, max},
+            Increment = 1,
+            CurrentValue = default,
+            Callback = cb,
+        })
+    end)
+    if not ok then warn("[Slashsaken] Slider '"..name.."': "..tostring(err)) end
 end
+
 local function mkInput(tab, name, default, placeholder, cb)
-    local ok, err = pcall(function() tab:CreateInput({ name = name, default = default, placeholder = placeholder, callback = cb }) end)
+    local ok, err = pcall(function()
+        tab:CreateInput({
+            Name = name,
+            CurrentValue = default,
+            PlaceholderText = placeholder,
+            RemoveTextAfterFocusLost = false,
+            Callback = cb,
+        })
+    end)
     if not ok then warn("[Slashsaken] Input '"..name.."': "..tostring(err)) end
 end
+
 local function mkDropdown(tab, name, options, default, cb)
-    local ok, err = pcall(function() tab:CreateDropdown({ name = name, options = options, default = default, callback = cb }) end)
+    local ok, err = pcall(function()
+        tab:CreateDropdown({
+            Name = name,
+            Options = options,
+            CurrentOption = default,
+            MultipleOptions = false,
+            Callback = cb,
+        })
+    end)
     if not ok then warn("[Slashsaken] Dropdown '"..name.."': "..tostring(err)) end
 end
+
 local function mkButton(tab, name, cb)
-    local ok, err = pcall(function() tab:CreateButton({ name = name, callback = cb }) end)
+    local ok, err = pcall(function()
+        tab:CreateButton({ Name = name, Callback = cb })
+    end)
     if not ok then warn("[Slashsaken] Button '"..name.."': "..tostring(err)) end
 end
+
 local function mkParagraph(tab, title, content)
     local p
-    local ok = pcall(function() p = tab:CreateParagraph({ title = title, content = content }) end)
-    if not ok or not p then
-        local ok2, p2 = pcall(function() return tab:CreateParagraph({ name = title, content = content }) end)
-        if ok2 and p2 then p = p2 end
-    end
+    local ok = pcall(function()
+        p = tab:CreateParagraph({ Title = title, Content = content })
+    end)
+    if not ok then warn("[Slashsaken] Paragraph '"..title.."' failed") end
     return p
 end
+
 local function setPara(p, title, content)
     if not p then return end
-    pcall(function() p:Set({ title = title or "", content = content or "" }) end)
-    pcall(function() p.Title = title; p.Content = content end)
+    pcall(function()
+        p:Set({ Title = title or "", Content = content or "" })
+    end)
 end
 
 local ICON = 4483362458
@@ -1456,7 +1502,7 @@ do
     end
 end
 
--- 3) AUTO BLOCK (trigger dropdown replaces two toggles)
+-- 3) AUTO BLOCK
 do
     local tab = makeTab("Auto Block", ICON)
     if tab then
@@ -1481,7 +1527,7 @@ do
     end
 end
 
--- 4) FACING CHECK  (Circle Check and Box Check are SEPARATE)
+-- 4) FACING CHECK
 do
     local tab = makeTab("Facing Check", ICON)
     if tab then
@@ -1598,9 +1644,9 @@ do
             local ok = applyNoliVoidRush(v)
             pcall(function()
                 Rayfield:Notify({
-                    title = "Noli Void Rush",
-                    content = ok and ("Mode set to " .. v .. " — applies next Noli spawn") or "Noli config not loaded (executor lacks 'require')",
-                    duration = 3,
+                    Title = "Noli Void Rush",
+                    Content = ok and ("Mode set to " .. v .. " — applies next Noli spawn") or "Noli config not loaded (executor lacks 'require')",
+                    Duration = 3,
                 })
             end)
         end)
@@ -1692,27 +1738,40 @@ do
     end
 end
 
--- 11) MISC (manual Save/Load Config)
+-- 11) MISC
 do
     local tab = makeTab("Misc", ICON)
     if tab then
         mkSection(tab, "Configuration")
         mkButton(tab, "Save Config", function()
-            local ok = pcall(function() Rayfield:SaveConfiguration("Slashsaken") end)
-            if not ok then ok = pcall(function() Rayfield:SaveConfig() end) end
-            if not ok then ok = pcall(function() Rayfield:Save() end) end
-            pcall(function() Rayfield:Notify({ title = "Config", content = ok and "Saved successfully" or "Save failed (unsupported build)", duration = 3 }) end)
+            local ok = pcall(function() Rayfield:SaveConfig() end)
+            pcall(function()
+                Rayfield:Notify({
+                    Title = "Config",
+                    Content = ok and "Saved successfully" or "Save failed",
+                    Duration = 3,
+                })
+            end)
         end)
         mkButton(tab, "Load Config", function()
-            local ok = pcall(function() Rayfield:LoadConfiguration("Slashsaken") end)
-            if not ok then ok = pcall(function() Rayfield:LoadConfig() end) end
-            if not ok then ok = pcall(function() Rayfield:Load() end) end
-            pcall(function() Rayfield:Notify({ title = "Config", content = ok and "Loaded successfully" or "Load failed (unsupported build)", duration = 3 }) end)
+            local ok = pcall(function() Rayfield:LoadConfig() end)
+            pcall(function()
+                Rayfield:Notify({
+                    Title = "Config",
+                    Content = ok and "Loaded successfully" or "Load failed",
+                    Duration = 3,
+                })
+            end)
         end)
         mkButton(tab, "Delete Config", function()
-            local ok = pcall(function() Rayfield:DeleteConfiguration("Slashsaken") end)
-            if not ok then ok = pcall(function() Rayfield:DeleteConfig() end) end
-            pcall(function() Rayfield:Notify({ title = "Config", content = ok and "Deleted" or "Delete failed (unsupported build)", duration = 3 }) end)
+            local ok = pcall(function() Rayfield:DeleteConfig() end)
+            pcall(function()
+                Rayfield:Notify({
+                    Title = "Config",
+                    Content = ok and "Deleted" or "Delete failed",
+                    Duration = 3,
+                })
+            end)
         end)
 
         mkSection(tab, "Chat & Lighting")
@@ -1751,7 +1810,7 @@ do
                         v.Enabled = false
                     end
                 end
-                pcall(function() Rayfield:Notify({ title = "FPS Boost", content = "Successfully boosted FPS!", duration = 3 }) end)
+                pcall(function() Rayfield:Notify({ Title = "FPS Boost", Content = "Successfully boosted FPS!", Duration = 3 }) end)
             end)
         end)
         mkButton(tab, "Clear Cache", function()
@@ -1764,7 +1823,7 @@ do
                 end
                 boxBlockActive = {}
                 if gcinfo then collectgarbage("collect") end
-                pcall(function() Rayfield:Notify({ title = "Cache Cleaner", content = "Cleared!", duration = 3 }) end)
+                pcall(function() Rayfield:Notify({ Title = "Cache Cleaner", Content = "Cleared!", Duration = 3 }) end)
             end)
         end)
     end
@@ -1776,13 +1835,16 @@ do
     if tab then
         mkSection(tab, "Menu")
         pcall(function()
-            tab:CreateKeybind({ name = "Toggle Menu", default = "RightShift", callback = function() end })
+            tab:CreateKeybind({
+                Name = "Toggle Menu",
+                CurrentKeybind = "RightShift",
+                HoldToInteract = false,
+                Callback = function() end,
+            })
         end)
         mkButton(tab, "Unload", function() pcall(function() Rayfield:Destroy() end) end)
     end
 end
-
--- NO auto-load of saved config on startup — manual only
 
 -- ============================================================
 -- GAME LOGIC LOOPS
@@ -1798,7 +1860,6 @@ task.spawn(function()
     end
 end)
 
--- Local M1 detection (M1_RECOVERY lockout)
 RunService.RenderStepped:Connect(function()
     if not cachedAnimator then refreshAnimator() end
     local animator = cachedAnimator
@@ -1818,7 +1879,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Per-killer M1 activity (drives green circle colour)
 RunService.Heartbeat:Connect(function()
     local folder = getKillersFolder()
     if not folder then return end
@@ -1840,7 +1900,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Auto Punch network hook
 task.spawn(function()
     local ok, networkModule = pcall(function()
         return require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"))
@@ -1860,7 +1919,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- AUTO BLOCK — triggers via Anim / Sound / Both
+-- AUTO BLOCK — Anim trigger
 -- ============================================================
 RunService.RenderStepped:Connect(function()
     if not autoBlockOn then return end
@@ -1897,7 +1956,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Active-box window check (block if you enter during the 0.2s)
 RunService.RenderStepped:Connect(function()
     if not autoBlockOn then return end
     if not boxCheckEnabled then return end
@@ -1914,7 +1972,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================
--- AIM PUNCH — 100% smooth (frame-rate independent lerp)
+-- AIM PUNCH
 -- ============================================================
 RunService.RenderStepped:Connect(function()
     local aimPunch = MyAnimLockOn or aimPunchToggles["Character Lock"]
@@ -1971,7 +2029,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Circle visual colour update
 RunService.RenderStepped:Connect(function()
     local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
     local now = tick()
@@ -2006,7 +2063,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Flick detection
 RunService.RenderStepped:Connect(function(dt)
     if dt <= 0 then return end
     local folder = getKillersFolder()
@@ -2033,7 +2089,6 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- Hook sounds + track killer folder additions
 task.spawn(function()
     while true do
         local folder = getKillersFolder()
@@ -2064,7 +2119,6 @@ task.spawn(function()
     end
 end)
 
--- HDT trigger
 RunService.RenderStepped:Connect(function()
     if not hitboxDraggingTech then return end
     if isHelpless() then return end
@@ -2089,7 +2143,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ESP refresh loop
 task.spawn(function()
     while true do
         task.wait(1.5)
@@ -2137,7 +2190,6 @@ Workspace.DescendantAdded:Connect(function(d)
     end
 end)
 
--- Chat message when blocking
 RunService.RenderStepped:Connect(function()
     local myChar = lp.Character
     if not myChar then return end
@@ -2164,7 +2216,6 @@ RunService.RenderStepped:Connect(function()
     _blockPrevPlaying = currentPlaying
 end)
 
--- Killer Auto-Parry
 RunService.Heartbeat:Connect(function()
     if not killerAutoParryEnabled then return end
     local myKiller = getMyKillerName()
@@ -2209,7 +2260,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Killer Auto-Parry range circle
 RunService.RenderStepped:Connect(function()
     local myChar = lp.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -2235,7 +2285,6 @@ RunService.RenderStepped:Connect(function()
     killerParryRangeVisual.CFrame = CFrame.new(0, -(myRoot.Size.Y / 2 + 0.05), 0) * CFrame.Angles(math.rad(90), 0, 0)
 end)
 
--- Aim module driver
 RunService.RenderStepped:Connect(function()
     if not aimState.Enabled then return end
     if not aimEventActive then return end
