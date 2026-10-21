@@ -105,10 +105,11 @@ local Lighting          = game:GetService("Lighting")
 local TextChatService   = game:GetService("TextChatService")
 local UserInputService  = game:GetService("UserInputService")
 local TweenService      = game:GetService("TweenService")
+local CollectionService = game:GetService("CollectionService")
 local testRemote        = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
 
 -- ============================================================
--- STATE (Unchanged)
+-- STATE
 -- ============================================================
 local wallCheckEnabled       = false
 local facingCheckEnabled     = true
@@ -123,7 +124,11 @@ local messageWhenAutoBlock   = ""
 
 local boxCheckEnabled        = false
 local boxBlockTransparency   = 0.5
-local boxBlockSize           = 6
+local boxBlockOffset         = 0
+local boxBlockWidth          = 6
+local boxBlockLength         = 6
+local boxBlockHeight         = 6
+local boxBlockDuration       = 0.35
 local boxBlockActive         = {}
 
 local hitboxDraggingTech     = false
@@ -199,7 +204,7 @@ local autoGenOverlayTemplate = nil
 local hideCompletedGens      = true
 
 -- ============================================================
--- CONSTANTS (Unchanged)
+-- CONSTANTS
 -- ============================================================
 local PARRY_KEYWORDS = { "slash", "flintlock", "one shot", "oneshot", "one-shot", "hatchet", "parry" }
 local AIM_KEYWORDS   = { "slash", "parry punch", "one shot", "oneshot", "gun explosion", "sacrificial dagger", "backstab", "hatchet" }
@@ -269,7 +274,7 @@ local NOLI_MODES = {
 }
 
 -- ============================================================
--- HELPERS (Unchanged)
+-- HELPERS
 -- ============================================================
 local function notify(title, desc, time)
     pcall(function()
@@ -292,20 +297,56 @@ local function getMyKillerName()
 end
 local function isLocalPlayerKiller() return getMyKillerName() ~= nil end
 
+-- FIX 1: Expanded helpless detection
 local function isHelpless()
     local char = lp.Character
     if not char then return true end
-    if char:GetAttribute("Helpless") == true then return true end
-    if char:GetAttribute("Stunned") == true then return true end
-    if char:FindFirstChild("Helpless") or char:FindFirstChild("Stunned") then return true end
-    local se = char:FindFirstChild("StatusEffects")
-    if se and (se:FindFirstChild("Helpless") or se:FindFirstChild("Stunned")) then return true end
-    local st = char:FindFirstChild("Status")
-    if st and (st:FindFirstChild("Helpless") or st:FindFirstChild("Stunned")) then return true end
+
+    for _, name in ipairs({"Helpless","Stunned","Ragdolled","Downed","Grabbed","Caught","Incapacitated","Dying","Frozen"}) do
+        if char:GetAttribute(name) == true then return true end
+    end
+
+    for _, name in ipairs({"Helpless","Stunned","Ragdoll","Downed","Grabbed","Caught"}) do
+        if char:FindFirstChild(name) then return true end
+    end
+
+    local ok, tags = pcall(function() return CollectionService:GetTags(char) end)
+    if ok and tags then
+        for _, tag in ipairs(tags) do
+            local t = string.lower(tostring(tag))
+            if t:find("helpless") or t:find("stun") or t:find("down")
+               or t:find("grab") or t:find("ragdoll") or t:find("incapacitat")
+               or t:find("dead") or t:find("frozen") then
+                return true
+            end
+        end
+    end
+
+    for _, folderName in ipairs({"StatusEffects","Status","Debuffs","Effects","States"}) do
+        local folder = char:FindFirstChild(folderName)
+        if folder then
+            for _, name in ipairs({"Helpless","Stunned","Ragdoll","Downed","Grabbed","Incapacitated"}) do
+                if folder:FindFirstChild(name) then return true end
+            end
+        end
+    end
+
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum and (hum:GetAttribute("Helpless") == true or hum.Health <= 0) then return true end
+    if hum then
+        if hum.Health <= 0 then return true end
+        if hum:GetAttribute("Helpless") == true then return true end
+        if hum.PlatformStand then return true end
+        local state = hum:GetState()
+        if state == Enum.HumanoidStateType.PlatformStanding
+           or state == Enum.HumanoidStateType.Ragdoll
+           or state == Enum.HumanoidStateType.FallingDown then
+            return true
+        end
+    end
+
     return false
 end
+
 local function isM1LockedOut()
     if not m1LockoutEnabled then return false end
     if lastM1Time == 0 then return false end
@@ -468,8 +509,10 @@ local function isKillerFlicking(killer, myRoot, killerHRP)
     return (tick() - fd.lastFlickTick) < flickWindow
 end
 
+-- FIX 3: HDT can't drag while helpless
 local function beginDragIntoKiller(killerModel)
     if isLocalPlayerKiller() then return end
+    if isHelpless() then return end
     if _hitboxDraggingDebounce then return end
     if not killerModel or not killerModel.Parent then return end
     local char = lp and lp.Character
@@ -496,6 +539,7 @@ local function beginDragIntoKiller(killerModel)
             if humanoid then pcall(function() humanoid.AutoRotate = oldAutoRotate end) end
             return
         end
+        if isHelpless() then _hitboxDraggingDebounce = false; return end
         if not (char and char.Parent) or not (killerModel and killerModel.Parent) then _hitboxDraggingDebounce = false; return end
         local t = getKillerHRP(killerModel)
         if not t then _hitboxDraggingDebounce = false; return end
@@ -518,6 +562,8 @@ local function isBlockOnCooldown()
     if (tick() - lastBlockFireTime) < BLOCK_FIRE_INTERVAL then return true end
     return false
 end
+
+-- FIX 2: fireRemoteBlock with server-rejection safety net
 local function fireRemoteBlock(killer)
     if isHelpless() then return end
     if isLocalPlayerKiller() then return end
@@ -525,6 +571,8 @@ local function fireRemoteBlock(killer)
     if killer and lastBlockByKiller[killer] and (tick() - lastBlockByKiller[killer]) < blockLingerCooldown then
         return
     end
+    if isHelpless() then return end
+
     testRemote:FireServer("UseActorAbility", {
         (function(b) local buf=buffer.create(#b); for i=1,#b do buffer.writeu8(buf,i-1,b[i]) end; return buf end)({3,5,0,0,0,66,108,111,99,107})
     })
@@ -532,6 +580,29 @@ local function fireRemoteBlock(killer)
     blockCooldownUntil = tick() + BLOCK_COOLDOWN
     if killer then lastBlockByKiller[killer] = tick() end
     notify("Auto Block", "Block fired — 27s cooldown", 2)
+
+    task.delay(0.3, function()
+        refreshUIRefs()
+        local function cdEmpty(cd)
+            if not cd then return true end
+            local txt = tostring(cd.Text or ""):gsub("%s", "")
+            if txt == "" then return true end
+            local num = tonumber(txt)
+            if num and num <= 0.1 then return true end
+            return false
+        end
+        if cdEmpty(cachedCooldown) then
+            task.wait(0.5)
+            refreshUIRefs()
+            if cdEmpty(cachedCooldown) then
+                lastBlockFireTime = 0
+                blockCooldownUntil = 0
+                if killer then lastBlockByKiller[killer] = nil end
+                warn("[Slashsaken] Block was rejected server-side — cooldown reset")
+            end
+        end
+    end)
+
     if hitboxDraggingTech then
         task.spawn(function()
             local nearest = getNearestKillerModel()
@@ -549,12 +620,14 @@ local function fireRemoteClone()
     })
 end
 
+-- FIX 4: Box with smooth follow + offset/width/length/height
 local function createBoxBlockVisual(killer, hrp)
     local existing = boxBlockActive[killer]
     if existing and existing.part and existing.part.Parent and tick() < existing.expireTime then
         return
     end
     if existing then
+        if existing.followConn then existing.followConn:Disconnect() end
         if existing.part and existing.part.Parent then existing.part:Destroy() end
         boxBlockActive[killer] = nil
     end
@@ -569,8 +642,8 @@ local function createBoxBlockVisual(killer, hrp)
     box.Transparency = boxBlockTransparency
     box.Color = Color3.fromRGB(255, 255, 0)
     box.Material = Enum.Material.ForceField
-    box.Size = Vector3.new(boxBlockSize, boxBlockSize, boxBlockSize)
-    box.CFrame = CFrame.new(hrp.Position)
+    box.Size = Vector3.new(boxBlockWidth, boxBlockHeight, boxBlockLength)
+    box.CFrame = hrp.CFrame * CFrame.new(0, boxBlockOffset, 0)
 
     local sel = Instance.new("SelectionBox")
     sel.Adornee = box
@@ -582,18 +655,35 @@ local function createBoxBlockVisual(killer, hrp)
 
     box.Parent = workspace
 
+    local followConn
+    followConn = RunService.Heartbeat:Connect(function(dt)
+        if not box or not box.Parent then
+            if followConn then followConn:Disconnect() end
+            return
+        end
+        if not hrp or not hrp.Parent then
+            if followConn then followConn:Disconnect() end
+            return
+        end
+        local targetCF = hrp.CFrame * CFrame.new(0, boxBlockOffset, 0)
+        local alpha = 1 - math.exp(-20 * dt)
+        box.CFrame = box.CFrame:Lerp(targetCF, alpha)
+    end)
+
     boxBlockActive[killer] = {
         part = box,
         selectionBox = sel,
-        expireTime = tick() + 0.2,
+        expireTime = tick() + boxBlockDuration,
+        followConn = followConn,
     }
 
-    task.delay(0.2, function()
+    task.delay(boxBlockDuration, function()
+        if followConn then followConn:Disconnect() end
         local data = boxBlockActive[killer]
         if data and data.part == box then
             boxBlockActive[killer] = nil
             if box and box.Parent then
-                local fade = TweenService:Create(box, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Transparency = 1 })
+                local fade = TweenService:Create(box, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Transparency = 1 })
                 if sel and sel.Parent then sel.Transparency = 1 end
                 fade:Play()
                 fade.Completed:Once(function() if box and box.Parent then box:Destroy() end end)
@@ -1286,7 +1376,7 @@ lp.CharacterAdded:Connect(function()
 end)
 
 -- ============================================================
--- WINDUI UI (with fixes + background image)
+-- WINDUI UI
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Slashsaken",
@@ -1294,8 +1384,6 @@ local Window = WindUI:CreateWindow({
     Folder = "Slashsaken",
     Icon = "wind",
     ToggleKey = Enum.KeyCode.RightShift,
-
-    -- Background image (same as the loading screen)
     Background = "rbxassetid://130582019929746",
     BackgroundImageTransparency = 0.5,
 })
@@ -1388,7 +1476,7 @@ do
 end
 
 -- ============================================================
--- FACING CHECK
+-- FACING CHECK (with FIX 4: Box Block settings)
 -- ============================================================
 do
     local Tab = Tabs.FacingCheck
@@ -1428,13 +1516,17 @@ do
         boxCheckEnabled = v
         if not v then
             for _, data in pairs(boxBlockActive) do
+                if data.followConn then data.followConn:Disconnect() end
                 if data.part and data.part.Parent then data.part:Destroy() end
             end
             boxBlockActive = {}
         end
     end })
     Tab:Slider({ Title = "Box Transparency", Value = { Min = 0, Max = 0.9, Default = 0.5 }, Step = 0.05, Callback = function(v) boxBlockTransparency = v end })
-    Tab:Slider({ Title = "Box Size", Value = { Min = 2, Max = 15, Default = 6 }, Step = 1, Callback = function(v) boxBlockSize = v end })
+    Tab:Slider({ Title = "Box Offset (studs)", Value = { Min = -5, Max = 5, Default = 0 }, Step = 0.1, Callback = function(v) boxBlockOffset = v end })
+    Tab:Slider({ Title = "Box Width",          Value = { Min = 1, Max = 20, Default = 6 }, Step = 0.5, Callback = function(v) boxBlockWidth = v end })
+    Tab:Slider({ Title = "Box Length",         Value = { Min = 1, Max = 20, Default = 6 }, Step = 0.5, Callback = function(v) boxBlockLength = v end })
+    Tab:Slider({ Title = "Box Height",         Value = { Min = 1, Max = 20, Default = 6 }, Step = 0.5, Callback = function(v) boxBlockHeight = v end })
 
     Tab:Section({ Title = "Flick Protection" })
     Tab:Toggle({ Title = "Enable Flick Protection", Value = false, Callback = function(v) flickProtectionEnabled = v end })
@@ -1617,6 +1709,7 @@ do
                 if v:IsA("Part") and v.Name == "AntiFlickZone" then v:Destroy() end
             end
             for _, data in pairs(boxBlockActive) do
+                if data.followConn then data.followConn:Disconnect() end
                 if data.part and data.part.Parent then data.part:Destroy() end
             end
             boxBlockActive = {}
@@ -1641,23 +1734,7 @@ do
 end
 
 -- ============================================================
--- POST-UI LOOPS (Unchanged)
--- ============================================================
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        local remaining = BLOCK_COOLDOWN - (tick() - lastBlockFireTime)
-        if lastBlockFireTime > 0 and remaining > 0 and remaining <= BLOCK_COOLDOWN then
-            -- Dynamic label updating is not exposed in the same way for WindUI sections,
-            -- so the cooldown is only shown in the Auto Block notification.
-            -- You can print to console if you want live feedback:
-            -- print(string.format("[HDT] Cooldown: %.1fs", remaining))
-        end
-    end
-end)
-
--- ============================================================
--- GAME LOGIC LOOPS
+-- POST-UI LOOPS
 -- ============================================================
 task.spawn(function()
     task.wait(1)
@@ -1914,7 +1991,10 @@ task.spawn(function()
                 flickData[k] = nil; m1ActiveByKiller[k] = nil
                 lastBlockByKiller[k] = nil
                 local data = boxBlockActive[k]
-                if data and data.part and data.part.Parent then data.part:Destroy() end
+                if data then
+                    if data.followConn then data.followConn:Disconnect() end
+                    if data.part and data.part.Parent then data.part:Destroy() end
+                end
                 boxBlockActive[k] = nil
             end)
             break
