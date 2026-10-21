@@ -297,7 +297,7 @@ local function getMyKillerName()
 end
 local function isLocalPlayerKiller() return getMyKillerName() ~= nil end
 
--- FIX 1: Expanded helpless detection
+-- FIX 2: Tighter helpless detection (exact tag match, no FallingDown)
 local function isHelpless()
     local char = lp.Character
     if not char then return true end
@@ -314,9 +314,9 @@ local function isHelpless()
     if ok and tags then
         for _, tag in ipairs(tags) do
             local t = string.lower(tostring(tag))
-            if t:find("helpless") or t:find("stun") or t:find("down")
-               or t:find("grab") or t:find("ragdoll") or t:find("incapacitat")
-               or t:find("dead") or t:find("frozen") then
+            if t == "helpless" or t == "stunned" or t == "downed"
+               or t == "grabbed" or t == "ragdolled" or t == "ragdoll"
+               or t == "incapacitated" or t == "dead" or t == "frozen" then
                 return true
             end
         end
@@ -338,8 +338,7 @@ local function isHelpless()
         if hum.PlatformStand then return true end
         local state = hum:GetState()
         if state == Enum.HumanoidStateType.PlatformStanding
-           or state == Enum.HumanoidStateType.Ragdoll
-           or state == Enum.HumanoidStateType.FallingDown then
+           or state == Enum.HumanoidStateType.Ragdoll then
             return true
         end
     end
@@ -509,7 +508,6 @@ local function isKillerFlicking(killer, myRoot, killerHRP)
     return (tick() - fd.lastFlickTick) < flickWindow
 end
 
--- FIX 3: HDT can't drag while helpless
 local function beginDragIntoKiller(killerModel)
     if isLocalPlayerKiller() then return end
     if isHelpless() then return end
@@ -563,7 +561,7 @@ local function isBlockOnCooldown()
     return false
 end
 
--- FIX 2: fireRemoteBlock with server-rejection safety net
+-- FIX 1: Removed server-rejection safety net
 local function fireRemoteBlock(killer)
     if isHelpless() then return end
     if isLocalPlayerKiller() then return end
@@ -580,28 +578,6 @@ local function fireRemoteBlock(killer)
     blockCooldownUntil = tick() + BLOCK_COOLDOWN
     if killer then lastBlockByKiller[killer] = tick() end
     notify("Auto Block", "Block fired — 27s cooldown", 2)
-
-    task.delay(0.3, function()
-        refreshUIRefs()
-        local function cdEmpty(cd)
-            if not cd then return true end
-            local txt = tostring(cd.Text or ""):gsub("%s", "")
-            if txt == "" then return true end
-            local num = tonumber(txt)
-            if num and num <= 0.1 then return true end
-            return false
-        end
-        if cdEmpty(cachedCooldown) then
-            task.wait(0.5)
-            refreshUIRefs()
-            if cdEmpty(cachedCooldown) then
-                lastBlockFireTime = 0
-                blockCooldownUntil = 0
-                if killer then lastBlockByKiller[killer] = nil end
-                warn("[Slashsaken] Block was rejected server-side — cooldown reset")
-            end
-        end
-    end)
 
     if hitboxDraggingTech then
         task.spawn(function()
@@ -620,7 +596,7 @@ local function fireRemoteClone()
     })
 end
 
--- FIX 4: Box with smooth follow + offset/width/length/height
+-- Box with smooth follow + offset/width/length/height
 local function createBoxBlockVisual(killer, hrp)
     local existing = boxBlockActive[killer]
     if existing and existing.part and existing.part.Parent and tick() < existing.expireTime then
@@ -763,13 +739,14 @@ end
 refreshAnimator()
 lp.CharacterAdded:Connect(function() task.wait(0.5); refreshAnimator(); refreshUIRefs() end)
 
+-- FIX 3: Softer circle (transparency 0.78, pastel colours)
 local function addFacingVisual(killer)
     if not killer or not killer:IsA("Model") or facingVisuals[killer] then return end
     local hrp = killer:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     local v = Instance.new("CylinderHandleAdornment")
     v.Name = "FacingCheckVisual"; v.Adornee = hrp; v.AlwaysOnTop = true
-    v.ZIndex = 2; v.Transparency = 0.5; v.Color3 = Color3.fromRGB(255,255,0); v.Parent = hrp
+    v.ZIndex = 2; v.Transparency = 0.78; v.Color3 = Color3.fromRGB(255,215,80); v.Parent = hrp
     facingVisuals[killer] = v
 end
 local function removeFacingVisual(killer)
@@ -1476,7 +1453,7 @@ do
 end
 
 -- ============================================================
--- FACING CHECK (with FIX 4: Box Block settings)
+-- FACING CHECK
 -- ============================================================
 do
     local Tab = Tabs.FacingCheck
@@ -1910,6 +1887,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- Circle visual colour update (FIX 3: transparency 0.78, pastel colours)
 RunService.RenderStepped:Connect(function()
     local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
     local now = tick()
@@ -1921,13 +1899,13 @@ RunService.RenderStepped:Connect(function()
             local center, radius = getFacingCircleInfo(hrp)
             v.Radius = radius; v.Height = 0.12
             v.CFrame = CFrame.new(0, -(hrp.Size.Y / 2 + 0.05), -(center - hrp.Position).Magnitude) * CFrame.Angles(math.rad(90), 0, 0)
-            v.Transparency = facingVisualOn and 0.5 or 1
+            v.Transparency = facingVisualOn and 0.78 or 1
             if myRoot then
                 local inside = (myRoot.Position - center).Magnitude <= radius
                 local m1Active = m1ActiveByKiller[killer] and (now - m1ActiveByKiller[killer]) < 0.5
-                if not inside then v.Color3 = Color3.fromRGB(255,255,0)
-                elseif m1Active then v.Color3 = Color3.fromRGB(0,255,0)
-                else v.Color3 = Color3.fromRGB(255,60,60) end
+                if not inside then v.Color3 = Color3.fromRGB(255,215,80)
+                elseif m1Active then v.Color3 = Color3.fromRGB(80,230,120)
+                else v.Color3 = Color3.fromRGB(255,100,100) end
             end
         end
     end
