@@ -63,25 +63,19 @@ end
 showSplash()
 
 -- ============================================================
--- RAYFIELD GEN 2 LOADER (sirius.menu/gen2)
+-- OBSIDIAN LOADER
 -- ============================================================
-local Rayfield
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library, ThemeManager, SaveManager
 do
-    local lastErr
-    for attempt = 1, 5 do
-        local ok, err = pcall(function()
-            local src = game:HttpGet("https://sirius.menu/gen2", true)
-            local fn  = loadstring(src)
-            assert(type(fn) == "function", "loadstring returned nil")
-            Rayfield = fn()
-            assert(type(Rayfield) == "table", "module is not a table")
-        end)
-        if ok and type(Rayfield) == "table" then break end
-        lastErr = err
-        warn(("[Slashsaken] Rayfield Gen2 attempt %d failed: %s"):format(attempt, tostring(err)))
-        task.wait(1)
+    local function try(fn)
+        local ok, res = pcall(fn)
+        return ok and res or nil
     end
-    if type(Rayfield) ~= "table" then
+    Library      = try(function() return loadstring(game:HttpGet(repo .. "Library.lua"))() end)
+    ThemeManager = try(function() return loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))() end)
+    SaveManager  = try(function() return loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))() end)
+    if not Library then
         local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
         if PlayerGui then
             local sg = Instance.new("ScreenGui"); sg.Name = "SlashsakenError"
@@ -95,12 +89,18 @@ do
             t.Size = UDim2.new(1,-20,1,-20); t.Position = UDim2.new(0,10,0,10)
             t.BackgroundTransparency = 1; t.TextColor3 = Color3.new(1,1,1); t.TextWrapped = true
             t.Font = Enum.Font.GothamMedium; t.TextSize = 14
-            t.Text = "Slashsaken: Failed to load Rayfield Gen 2 after 5 attempts. sirius.menu may be down."
+            t.Text = "Slashsaken: Failed to load Obsidian library. GitHub may be down."
             t.Parent = f
         end
-        error("[Slashsaken] Rayfield Gen2 load failed: " .. tostring(lastErr))
+        error("[Slashsaken] Obsidian load failed")
     end
 end
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+Library.ForceCheckbox             = false
+Library.ShowToggleFrameInKeybinds = true
 
 -- ============================================================
 -- SERVICES
@@ -152,7 +152,7 @@ local lastBlockByKiller      = {}
 local MyAnimLockOn           = false
 local AIM_WINDOW             = 0.8
 local predictionValue        = 4
-local aimPunchToggles        = { ["Character Lock"] = false, ["Camera Lock"] = false }
+local aimPunchToggles        = { ["Character Lock"] = true, ["Camera Lock"] = false }
 local autoPunchEventEnabled  = false
 local autoblockToggles       = { ["Clone"] = false }
 
@@ -207,11 +207,6 @@ local autoGenGridOverride    = false
 local autoGenGridSize        = 6
 local autoGenOverlayTemplate = nil
 local hideCompletedGens      = true
-
-local AIM_InfoPara
-local HDT_CooldownPara
-local NOLI_StatusPara
-local KP_StatusPara, KP_LastTriggerPara
 
 -- ============================================================
 -- CONSTANTS
@@ -282,6 +277,26 @@ local NOLI_MODES = {
     Smooth = { InitialTurnDuration = 0.60, TurnSpeed = 500,   InitialTurnMult = 100  },
     Car    = { InitialTurnDuration = 0.01, TurnSpeed = 10000, InitialTurnMult = 1000 },
 }
+
+-- ============================================================
+-- NOTIFY HELPER
+-- ============================================================
+local function notify(title, desc, time)
+    pcall(function()
+        Library:Notify({ Title = title, Description = desc, Time = time or 3 })
+    end)
+end
+
+-- ============================================================
+-- LABEL UPDATE HELPER
+-- ============================================================
+local function setLabel(key, text)
+    if not key then return end
+    pcall(function()
+        local opt = Options[key]
+        if opt and opt.SetText then opt:SetText(text) end
+    end)
+end
 
 -- ============================================================
 -- ROLE HELPERS
@@ -387,15 +402,13 @@ end
 updateKillerParryAnims()
 
 local function setKillerParryLastLabel(txt)
-    if not KP_LastTriggerPara then return end
-    pcall(function() KP_LastTriggerPara:Set({ Title = "Last trigger: " .. tostring(txt), Content = "" }) end)
+    setLabel("KillerParryLastLabel", "Last trigger: " .. tostring(txt))
 end
 local function setKillerParryStatus(txt)
     local now = tick()
     if now - killerParryLastStatusTime < 1 then return end
     killerParryLastStatusTime = now
-    if not KP_StatusPara then return end
-    pcall(function() KP_StatusPara:Set({ Title = "Status: " .. tostring(txt), Content = "" }) end)
+    setLabel("KillerParryStatusLabel", "Status: " .. tostring(txt))
 end
 local function nameMatchesParryKeyword(name)
     if not name or name == "" then return false end
@@ -560,7 +573,7 @@ local function fireRemoteBlock(killer)
     lastBlockFireTime  = tick()
     blockCooldownUntil = tick() + BLOCK_COOLDOWN
     if killer then lastBlockByKiller[killer] = tick() end
-    pcall(function() Rayfield:Notify({ Title = "Auto Block", Content = "Block fired — 27s cooldown", Duration = 2 }) end)
+    notify("Auto Block", "Block fired — 27s cooldown", 2)
     if hitboxDraggingTech then
         task.spawn(function()
             local nearest = getNearestKillerModel()
@@ -1351,122 +1364,44 @@ lp.CharacterAdded:Connect(function()
 end)
 
 -- ============================================================
--- RAYFIELD GEN 2 WINDOW + TABS  (FIXED API)
+-- OBSIDIAN WINDOW + TABS
 -- ============================================================
-local Window
+local Window = Library:CreateWindow({
+    Title      = "Slashsaken",
+    Footer     = "Beta — by viltrumite",
+    Icon       = 95816097006870,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+local Tabs = {
+    Notice         = Window:AddTab("Notice",         "bell"),
+    Esp            = Window:AddTab("Esp",            "eye"),
+    AutoBlock      = Window:AddTab("Auto Block",     "shield"),
+    FacingCheck    = Window:AddTab("Facing Check",   "target"),
+    Aim            = Window:AddTab("Aim",            "crosshair"),
+    AutoPunch      = Window:AddTab("Auto Punch",     "hand"),
+    Killer         = Window:AddTab("Killer",         "sword"),
+    Techs          = Window:AddTab("Techs",          "wrench"),
+    Generator      = Window:AddTab("Generator",      "zap"),
+    Stam           = Window:AddTab("Stam",           "activity"),
+    Misc           = Window:AddTab("Misc",           "settings"),
+    ["UI Settings"] = Window:AddTab("UI Settings",   "sliders"),
+}
+
+-- ============================================================
+-- NOTICE
+-- ============================================================
 do
-    local ok, w = pcall(function()
-        return Rayfield:CreateWindow({
-            Name = "Slashsaken [Beta]",
-            LoadingTitle = "Slashsaken",
-            LoadingSubtitle = "by viltrumite",
-            Theme = "Default",
-            DisableRayfieldPrompts = false,
-            DisableBuildWarnings = false,
-            ConfigurationSaving = {
-                Enabled = true,
-                FolderName = "Slashsaken",
-                FileName = "Slashsaken",
-            },
-            KeySystem = false,
-        })
-    end)
-    if ok and w then Window = w end
-    if not Window then
-        error("[Slashsaken] Window creation failed: " .. tostring(w))
-    end
-end
-
-local function makeTab(name, icon)
-    local ok, t = pcall(function() return Window:CreateTab(name, icon) end)
-    if not ok or not t then
-        warn(("[Slashsaken] CreateTab '%s' failed: %s"):format(name, tostring(t)))
-        return nil
-    end
-    return t
-end
-
-local function mkSection(tab, name)
-    pcall(function() tab:CreateSection(name) end)
-end
-
-local function mkToggle(tab, name, default, cb)
-    local ok, err = pcall(function()
-        tab:CreateToggle({ Name = name, CurrentValue = default, Callback = cb })
-    end)
-    if not ok then warn("[Slashsaken] Toggle '"..name.."': "..tostring(err)) end
-end
-
-local function mkSlider(tab, name, min, max, default, cb)
-    local ok, err = pcall(function()
-        tab:CreateSlider({
-            Name = name,
-            Range = {min, max},
-            Increment = 1,
-            CurrentValue = default,
-            Callback = cb,
-        })
-    end)
-    if not ok then warn("[Slashsaken] Slider '"..name.."': "..tostring(err)) end
-end
-
-local function mkInput(tab, name, default, placeholder, cb)
-    local ok, err = pcall(function()
-        tab:CreateInput({
-            Name = name,
-            CurrentValue = default,
-            PlaceholderText = placeholder,
-            RemoveTextAfterFocusLost = false,
-            Callback = cb,
-        })
-    end)
-    if not ok then warn("[Slashsaken] Input '"..name.."': "..tostring(err)) end
-end
-
-local function mkDropdown(tab, name, options, default, cb)
-    local ok, err = pcall(function()
-        tab:CreateDropdown({
-            Name = name,
-            Options = options,
-            CurrentOption = default,
-            MultipleOptions = false,
-            Callback = cb,
-        })
-    end)
-    if not ok then warn("[Slashsaken] Dropdown '"..name.."': "..tostring(err)) end
-end
-
-local function mkButton(tab, name, cb)
-    local ok, err = pcall(function()
-        tab:CreateButton({ Name = name, Callback = cb })
-    end)
-    if not ok then warn("[Slashsaken] Button '"..name.."': "..tostring(err)) end
-end
-
-local function mkParagraph(tab, title, content)
-    local p
-    local ok = pcall(function()
-        p = tab:CreateParagraph({ Title = title, Content = content })
-    end)
-    if not ok then warn("[Slashsaken] Paragraph '"..title.."' failed") end
-    return p
-end
-
-local function setPara(p, title, content)
-    if not p then return end
-    pcall(function()
-        p:Set({ Title = title or "", Content = content or "" })
-    end)
-end
-
-local ICON = 4483362458
-
--- 1) NOTICE
-do
-    local tab = makeTab("Notice", ICON)
-    if tab then
-        mkSection(tab, "Overview")
-        mkParagraph(tab, "Slashsaken [Beta] — By viltrumite",
+    local GB = Tabs.Notice:AddGroupbox({ Side = "Left", Name = "Overview", IconName = "info" })
+    GB:AddLabel("NoticeHeader", {
+        Text = "Slashsaken [Beta] — By viltrumite",
+        DoesWrap = true,
+        Size = 16,
+    })
+    GB:AddDivider()
+    GB:AddLabel("NoticeBody", {
+        Text =
             "• Auto Block — trigger source Anim / Sound / Both\n" ..
             "• Circle Block — facing-cone check (yellow/red/green)\n" ..
             "• Box Block — M1 spawns a box; block if you're inside\n" ..
@@ -1476,70 +1411,120 @@ do
             "• Killer Auto-Parry — 404Error / RagingPace\n" ..
             "• Aim Punch — 100% smooth lerp\n" ..
             "• Noli Void Rush — Subtle / Smooth / Car\n" ..
-            "• Config — manual save/load in Misc tab")
-    end
+            "• Config — manual save/load in UI Settings tab",
+        DoesWrap = true,
+    })
 end
 
--- 2) ESP
+-- ============================================================
+-- ESP
+-- ============================================================
 do
-    local tab = makeTab("Esp", ICON)
-    if tab then
-        mkSection(tab, "Players")
-        mkToggle(tab, "Killer ESP",    false, function(v) espKillerActive = v end)
-        mkToggle(tab, "Survivors ESP", false, function(v) espSurvivorActive = v end)
-        mkSection(tab, "Items")
-        mkToggle(tab, "Medkit ESP",    false, function(v)
+    local L = Tabs.Esp:AddGroupbox({ Side = "Left", Name = "Players", IconName = "users" })
+    L:AddToggle("EspKiller", { Text = "Killer ESP", Default = false, Callback = function(v) espKillerActive = v end })
+    L:AddToggle("EspSurvivor", { Text = "Survivors ESP", Default = false, Callback = function(v) espSurvivorActive = v end })
+
+    local R = Tabs.Esp:AddGroupbox({ Side = "Right", Name = "Items", IconName = "package" })
+    R:AddToggle("EspMedkit", {
+        Text = "Medkit ESP",
+        Default = false,
+        Callback = function(v)
             espMedkitActive = v
             if v then scanItems("Medkit") else medkitHighlights = clearList(medkitHighlights) end
-        end)
-        mkToggle(tab, "BloxyCola ESP", false, function(v)
+        end,
+    })
+    R:AddToggle("EspBloxy", {
+        Text = "BloxyCola ESP",
+        Default = false,
+        Callback = function(v)
             espBloxyActive = v
             if v then scanItems("BloxyCola") else bloxyHighlights = clearList(bloxyHighlights) end
-        end)
-        mkSection(tab, "Generators")
-        mkToggle(tab, "Generators ESP",            false, function(v) espGeneratorsActive = v; espDoGenerators(v) end)
-        mkToggle(tab, "Hide Completed Generators", true,  function(v) hideCompletedGens = v end)
-    end
+        end,
+    })
+    R:AddToggle("EspGenerators", { Text = "Generators ESP", Default = false, Callback = function(v) espGeneratorsActive = v; espDoGenerators(v) end })
+    R:AddToggle("EspHideCompleted", { Text = "Hide Completed Generators", Default = true, Callback = function(v) hideCompletedGens = v end })
 end
 
--- 3) AUTO BLOCK
+-- ============================================================
+-- AUTO BLOCK
+-- ============================================================
 do
-    local tab = makeTab("Auto Block", ICON)
-    if tab then
-        mkSection(tab, "Block")
-        mkToggle(tab, "Auto Block", true, function(v) autoBlockOn = v end)
-        mkDropdown(tab, "Trigger Source", {"Anim","Sound","Both"}, "Both", function(v)
-            blockTriggerMode = v
-        end)
-        mkInput(tab, "Detection Range (studs)", "18", "18", function(v) detectionRange = tonumber(v) or 18 end)
-        mkSlider(tab, "Killer Block Linger (s)", 0.1, 1, 0.4, function(v) blockLingerCooldown = v end)
-        mkToggle(tab, "Ghost Block", false, function(v)
-            if v then StartInvisibility() else StopInvisibility() end
-        end)
-        mkSection(tab, "M1 Recovery")
-        mkToggle(tab, "M1 Recovery Lockout", true, function(v) m1LockoutEnabled = v end)
-        mkInput(tab, "M1 Recovery Duration (s)", "0.4", "0.4", function(v) M1_RECOVERY = tonumber(v) or 0.4 end)
-        mkSection(tab, "Other Abilities")
-        mkToggle(tab, "Auto Clone (007n7)", false, function(v) autoblockToggles["Clone"] = v end)
-        mkSection(tab, "Chat")
-        mkToggle(tab, "Message When Blocking", false, function(v) messageWhenAutoBlockOn = v end)
-        mkInput(tab, "The message", "", "Block", function(v) messageWhenAutoBlock = v end)
-    end
+    local L = Tabs.AutoBlock:AddGroupbox({ Side = "Left", Name = "Block", IconName = "shield" })
+    L:AddToggle("AutoBlockToggle", { Text = "Auto Block", Default = true, Callback = function(v) autoBlockOn = v end })
+    L:AddDropdown("TriggerSource", {
+        Text = "Trigger Source",
+        Values = { "Anim", "Sound", "Both" },
+        Default = "Both",
+        Multi = false,
+        Callback = function(v) blockTriggerMode = v end,
+    })
+    L:AddInput("DetectionRangeInput", {
+        Text = "Detection Range (studs)",
+        Default = "18",
+        Placeholder = "18",
+        Numeric = true,
+        Finished = true,
+        Callback = function(v) detectionRange = tonumber(v) or 18 end,
+    })
+    L:AddSlider("BlockLingerSlider", {
+        Text = "Killer Block Linger (s)",
+        Default = 0.4,
+        Min = 0.1,
+        Max = 1,
+        Rounding = 2,
+        Callback = function(v) blockLingerCooldown = v end,
+    })
+    L:AddToggle("GhostBlockToggle", {
+        Text = "Ghost Block",
+        Default = false,
+        Callback = function(v) if v then StartInvisibility() else StopInvisibility() end end,
+    })
+
+    local L2 = Tabs.AutoBlock:AddGroupbox({ Side = "Left", Name = "M1 Recovery", IconName = "activity" })
+    L2:AddToggle("M1LockoutToggle", { Text = "M1 Recovery Lockout", Default = true, Callback = function(v) m1LockoutEnabled = v end })
+    L2:AddInput("M1RecoveryInput", {
+        Text = "M1 Recovery Duration (s)",
+        Default = "0.4",
+        Placeholder = "0.4",
+        Numeric = true,
+        Finished = true,
+        Callback = function(v) M1_RECOVERY = tonumber(v) or 0.4 end,
+    })
+
+    local R = Tabs.AutoBlock:AddGroupbox({ Side = "Right", Name = "Other Abilities", IconName = "sparkles" })
+    R:AddToggle("AutoCloneToggle", { Text = "Auto Clone (007n7)", Default = false, Callback = function(v) autoblockToggles["Clone"] = v end })
+
+    local R2 = Tabs.AutoBlock:AddGroupbox({ Side = "Right", Name = "Chat", IconName = "message-square" })
+    R2:AddToggle("MessageOnBlockToggle", { Text = "Message When Blocking", Default = false, Callback = function(v) messageWhenAutoBlockOn = v end })
+    R2:AddInput("MessageOnBlockInput", {
+        Text = "The message",
+        Default = "",
+        Placeholder = "Block",
+        Finished = true,
+        Callback = function(v) messageWhenAutoBlock = v end,
+    })
 end
 
--- 4) FACING CHECK
+-- ============================================================
+-- FACING CHECK
+-- ============================================================
 do
-    local tab = makeTab("Facing Check", ICON)
-    if tab then
-        mkSection(tab, "Circle Block")
-        mkToggle(tab, "Circle Block",   true, function(v)
+    local L = Tabs.FacingCheck:AddGroupbox({ Side = "Left", Name = "Circle Block", IconName = "circle-dot" })
+    L:AddToggle("CircleBlockToggle", {
+        Text = "Circle Block",
+        Default = true,
+        Callback = function(v)
             facingCheckEnabled = v
             if v then
                 local folder = getKillersFolder()
                 if folder then for _, k in ipairs(folder:GetChildren()) do addFacingVisual(k) end end
             end
-        end)
-        mkToggle(tab, "Show Circle Visual", true, function(v)
+        end,
+    })
+    L:AddToggle("ShowCircleVisualToggle", {
+        Text = "Show Circle Visual",
+        Default = true,
+        Callback = function(v)
             facingVisualOn = v
             local folder = getKillersFolder()
             if folder then
@@ -1547,8 +1532,15 @@ do
                     if v then addFacingVisual(k) else removeFacingVisual(k) end
                 end
             end
-        end)
-        mkInput(tab, "Facing DOT (0.3 = 72°, higher = tighter)", "0.3", "0.3", function(v)
+        end,
+    })
+    L:AddInput("FacingDotInput", {
+        Text = "Facing DOT (0.3 = 72°, higher = tighter)",
+        Default = "0.3",
+        Placeholder = "0.3",
+        Numeric = true,
+        Finished = true,
+        Callback = function(v)
             customFacingDot = tonumber(v) or 0.3
             for killer, visual in pairs(facingVisuals) do
                 local hrp = killer:FindFirstChild("HumanoidRootPart")
@@ -1559,11 +1551,15 @@ do
                     visual.CFrame = CFrame.new(0, -(hrp.Size.Y/2 + 0.05), -(center - hrp.Position).Magnitude) * CFrame.Angles(math.rad(90), 0, 0)
                 end
             end
-        end)
-        mkToggle(tab, "Wall Check", false, function(v) wallCheckEnabled = v end)
+        end,
+    })
+    L:AddToggle("WallCheckToggle", { Text = "Wall Check", Default = false, Callback = function(v) wallCheckEnabled = v end })
 
-        mkSection(tab, "Box Block")
-        mkToggle(tab, "Box Block", false, function(v)
+    local L2 = Tabs.FacingCheck:AddGroupbox({ Side = "Left", Name = "Box Block", IconName = "box" })
+    L2:AddToggle("BoxBlockToggle", {
+        Text = "Box Block",
+        Default = false,
+        Callback = function(v)
             boxCheckEnabled = v
             if not v then
                 for _, data in pairs(boxBlockActive) do
@@ -1571,112 +1567,154 @@ do
                 end
                 boxBlockActive = {}
             end
-        end)
-        mkSlider(tab, "Box Transparency", 0, 0.9, 0.5, function(v) boxBlockTransparency = v end)
-        mkSlider(tab, "Box Size", 2, 15, 6, function(v) boxBlockSize = v end)
+        end,
+    })
+    L2:AddSlider("BoxTransparencySlider", {
+        Text = "Box Transparency", Default = 0.5, Min = 0, Max = 0.9, Rounding = 2,
+        Callback = function(v) boxBlockTransparency = v end,
+    })
+    L2:AddSlider("BoxSizeSlider", {
+        Text = "Box Size", Default = 6, Min = 2, Max = 15, Rounding = 0,
+        Callback = function(v) boxBlockSize = v end,
+    })
 
-        mkSection(tab, "Flick Protection")
-        mkToggle(tab, "Enable Flick Protection", false, function(v) flickProtectionEnabled = v end)
-        mkInput(tab, "Flick Range (studs)",     "15",   "15",   function(v) flickRange = tonumber(v) or 15 end)
-        mkInput(tab, "Flick Threshold (deg/s)", "500",  "500",  function(v) flickDegPerSecThreshold = tonumber(v) or 500 end)
-        mkInput(tab, "Flick Window (s)",        "0.25", "0.25", function(v) flickWindow = tonumber(v) or 0.25 end)
-    end
+    local R = Tabs.FacingCheck:AddGroupbox({ Side = "Right", Name = "Flick Protection", IconName = "zap" })
+    R:AddToggle("FlickProtectToggle", { Text = "Enable Flick Protection", Default = false, Callback = function(v) flickProtectionEnabled = v end })
+    R:AddInput("FlickRangeInput", {
+        Text = "Flick Range (studs)", Default = "15", Placeholder = "15", Numeric = true, Finished = true,
+        Callback = function(v) flickRange = tonumber(v) or 15 end,
+    })
+    R:AddInput("FlickThresholdInput", {
+        Text = "Flick Threshold (deg/s)", Default = "500", Placeholder = "500", Numeric = true, Finished = true,
+        Callback = function(v) flickDegPerSecThreshold = tonumber(v) or 500 end,
+    })
+    R:AddInput("FlickWindowInput", {
+        Text = "Flick Window (s)", Default = "0.25", Placeholder = "0.25", Numeric = true, Finished = true,
+        Callback = function(v) flickWindow = tonumber(v) or 0.25 end,
+    })
 end
 
--- 5) AIM
+-- ============================================================
+-- AIM
+-- ============================================================
 do
-    local tab = makeTab("Aim", ICON)
-    if tab then
-        mkSection(tab, "Aim")
-        mkToggle(tab, "Enable Aim",            false, function(v) aimState.Enabled = v end)
-        mkToggle(tab, "Debug (print matches)", false, function(v) aimState.Debug = v end)
-        AIM_InfoPara = mkParagraph(tab, "Detecting survivor assets...", "")
-        mkSection(tab, "Tuning")
-        mkDropdown(tab, "Aim Mode",   {"Camera","HRP","HRP+Camera"}, "Camera", function(v) aimState.AimMode = v end)
-        mkSlider(tab, "Smoothness", 0.05, 1, 0.35, function(v) aimState.Smooth = v end)
-        mkDropdown(tab, "Prediction", {"Off","Ping","Velocity","Both"}, "Both", function(v) aimState.PredictMode = v end)
-        mkSlider(tab, "Velocity Lead (s)", 0, 0.5, 0.15, function(v) aimState.PredictLead = v end)
-        mkSlider(tab, "Ping Multiplier (Gun Explosion)", 0, 2, 1.0, function(v) aimState.PingMultiplier = v end)
-    end
-end
-task.spawn(function()
-    while task.wait(1) do
-        if AIM_InfoPara then
-            local nA, nS = 0, 0
-            for _ in pairs(aimAbilityAnimIds)  do nA += 1 end
-            for _ in pairs(aimAbilitySoundIds) do nS += 1 end
-            local char = lp.Character
-            local name = char and (char:GetAttribute("CharacterName") or char.Name) or "?"
-            setPara(AIM_InfoPara, string.format("%s — %d anim / %d sound loaded", name, nA, nS), "")
-        end
-    end
-end)
+    local L = Tabs.Aim:AddGroupbox({ Side = "Left", Name = "Aim", IconName = "crosshair" })
+    L:AddToggle("AimEnableToggle", { Text = "Enable Aim", Default = false, Callback = function(v) aimState.Enabled = v end })
+    L:AddToggle("AimDebugToggle", { Text = "Debug (print matches)", Default = false, Callback = function(v) aimState.Debug = v end })
+    L:AddLabel("AimInfoLabel", { Text = "Detecting survivor assets...", DoesWrap = true })
 
--- 6) AUTO PUNCH
-do
-    local tab = makeTab("Auto Punch", ICON)
-    if tab then
-        mkSection(tab, "Auto Punch")
-        mkToggle(tab, "Auto Punch",                     false, function(v) autoPunchEventEnabled = v end)
-        mkToggle(tab, "Aimbot (aim during your punch)", false, function(v) MyAnimLockOn = v end)
-        mkInput(tab, "Aim Lock Duration", "0.8", "0.8", function(v) AIM_WINDOW = tonumber(v) or 0.8 end)
-        mkSection(tab, "Aim Lock Modes")
-        mkToggle(tab, "Character Lock", true,  function(v) aimPunchToggles["Character Lock"] = v end)
-        mkToggle(tab, "Camera Lock",    false, function(v) aimPunchToggles["Camera Lock"] = v end)
-    end
+    local R = Tabs.Aim:AddGroupbox({ Side = "Right", Name = "Tuning", IconName = "sliders" })
+    R:AddDropdown("AimMode", {
+        Text = "Aim Mode",
+        Values = { "Camera", "HRP", "HRP+Camera" },
+        Default = "Camera",
+        Multi = false,
+        Callback = function(v) aimState.AimMode = v end,
+    })
+    R:AddSlider("AimSmooth", {
+        Text = "Smoothness", Default = 0.35, Min = 0.05, Max = 1, Rounding = 2,
+        Callback = function(v) aimState.Smooth = v end,
+    })
+    R:AddDropdown("AimPredict", {
+        Text = "Prediction",
+        Values = { "Off", "Ping", "Velocity", "Both" },
+        Default = "Both",
+        Multi = false,
+        Callback = function(v) aimState.PredictMode = v end,
+    })
+    R:AddSlider("AimVelLead", {
+        Text = "Velocity Lead (s)", Default = 0.15, Min = 0, Max = 0.5, Rounding = 2,
+        Callback = function(v) aimState.PredictLead = v end,
+    })
+    R:AddSlider("AimPingMult", {
+        Text = "Ping Multiplier (Gun Explosion)", Default = 1.0, Min = 0, Max = 2, Rounding = 2,
+        Callback = function(v) aimState.PingMultiplier = v end,
+    })
 end
 
--- 7) KILLER
+-- ============================================================
+-- AUTO PUNCH
+-- ============================================================
 do
-    local tab = makeTab("Killer", ICON)
-    if tab then
-        mkSection(tab, "Killer Auto-Parry")
-        mkToggle(tab, "Killer Auto-Parry", false, function(v) killerAutoParryEnabled = v end)
-        mkInput(tab, "Circle Range (studs)", "15", "15", function(v) killerParryRange = tonumber(v) or 15 end)
-        mkInput(tab, "Delay (0 = instant)",  "0",  "0",  function(v) killerParryDelay = tonumber(v) or 0 end)
-        mkInput(tab, "Cooldown (s)",         "1",  "1",  function(v) killerParryCooldown = tonumber(v) or 1 end)
-        mkToggle(tab, "Show Range Circle", true, function(v) killerParryVisualOn = v end)
-        KP_StatusPara      = mkParagraph(tab, "Status: Standby", "")
-        KP_LastTriggerPara = mkParagraph(tab, "Last trigger: None", "")
-        mkSection(tab, "Noli Void Rush")
-        mkDropdown(tab, "Steering Mode", {"Off","Subtle","Smooth","Car"}, "Off", function(v)
+    local L = Tabs.AutoPunch:AddGroupbox({ Side = "Left", Name = "Auto Punch", IconName = "hand" })
+    L:AddToggle("AutoPunchToggle", { Text = "Auto Punch", Default = false, Callback = function(v) autoPunchEventEnabled = v end })
+    L:AddToggle("AimbotToggle", { Text = "Aimbot (aim during your punch)", Default = false, Callback = function(v) MyAnimLockOn = v end })
+    L:AddInput("AimWindowInput", {
+        Text = "Aim Lock Duration", Default = "0.8", Placeholder = "0.8", Numeric = true, Finished = true,
+        Callback = function(v) AIM_WINDOW = tonumber(v) or 0.8 end,
+    })
+
+    local R = Tabs.AutoPunch:AddGroupbox({ Side = "Right", Name = "Aim Lock Modes", IconName = "crosshair" })
+    R:AddToggle("AimLockCharacter", { Text = "Character Lock", Default = true, Callback = function(v) aimPunchToggles["Character Lock"] = v end })
+    R:AddToggle("AimLockCamera",    { Text = "Camera Lock",    Default = false, Callback = function(v) aimPunchToggles["Camera Lock"] = v end })
+end
+
+-- ============================================================
+-- KILLER
+-- ============================================================
+do
+    local L = Tabs.Killer:AddGroupbox({ Side = "Left", Name = "Killer Auto-Parry", IconName = "sword" })
+    L:AddToggle("KillerParryToggle", { Text = "Killer Auto-Parry", Default = false, Callback = function(v) killerAutoParryEnabled = v end })
+    L:AddInput("KillerParryRangeInput", {
+        Text = "Circle Range (studs)", Default = "15", Placeholder = "15", Numeric = true, Finished = true,
+        Callback = function(v) killerParryRange = tonumber(v) or 15 end,
+    })
+    L:AddInput("KillerParryDelayInput", {
+        Text = "Delay (0 = instant)", Default = "0", Placeholder = "0", Numeric = true, Finished = true,
+        Callback = function(v) killerParryDelay = tonumber(v) or 0 end,
+    })
+    L:AddInput("KillerParryCooldownInput", {
+        Text = "Cooldown (s)", Default = "1", Placeholder = "1", Numeric = true, Finished = true,
+        Callback = function(v) killerParryCooldown = tonumber(v) or 1 end,
+    })
+    L:AddToggle("KillerParryVisualToggle", { Text = "Show Range Circle", Default = true, Callback = function(v) killerParryVisualOn = v end })
+    L:AddLabel("KillerParryStatusLabel", { Text = "Status: Standby", DoesWrap = true })
+    L:AddLabel("KillerParryLastLabel", { Text = "Last trigger: None", DoesWrap = true })
+
+    local R = Tabs.Killer:AddGroupbox({ Side = "Right", Name = "Noli Void Rush", IconName = "wind" })
+    R:AddDropdown("NoliModeDropdown", {
+        Text = "Steering Mode",
+        Values = { "Off", "Subtle", "Smooth", "Car" },
+        Default = "Off",
+        Multi = false,
+        Callback = function(v)
             noliVoidRushMode = v
             local ok = applyNoliVoidRush(v)
-            pcall(function()
-                Rayfield:Notify({
-                    Title = "Noli Void Rush",
-                    Content = ok and ("Mode set to " .. v .. " — applies next Noli spawn") or "Noli config not loaded (executor lacks 'require')",
-                    Duration = 3,
-                })
-            end)
-        end)
-        NOLI_StatusPara = mkParagraph(tab, "Noli config: scanning...", "")
-        mkSection(tab, "c00lkidd Dash")
-        mkToggle(tab, "Controllable Dash", false, function(v) controllableDashEnabled = v end)
-    end
-end
-task.spawn(function()
-    while task.wait(2) do
-        if NOLI_StatusPara then
-            setPara(NOLI_StatusPara,
-                noliConfig and "Noli config: loaded ✓" or "Noli config: not found (executor may not support 'require')",
-                "")
-        end
-    end
-end)
+            notify("Noli Void Rush",
+                ok and ("Mode set to " .. v .. " — applies next Noli spawn")
+                     or "Noli config not loaded (executor lacks 'require')", 3)
+        end,
+    })
+    R:AddLabel("NoliStatusLabel", { Text = "Noli config: scanning...", DoesWrap = true })
 
--- 8) TECHS
+    local R2 = Tabs.Killer:AddGroupbox({ Side = "Right", Name = "c00lkidd Dash", IconName = "wind" })
+    R2:AddToggle("CoolkiddDashToggle", { Text = "Controllable Dash", Default = false, Callback = function(v) controllableDashEnabled = v end })
+end
+
+-- ============================================================
+-- TECHS
+-- ============================================================
 do
-    local tab = makeTab("Techs", ICON)
-    if tab then
-        mkSection(tab, "HDT")
-        mkToggle(tab, "HDT (walk into killer on block)", false, function(v) hitboxDraggingTech = v end)
-        mkSlider(tab, "HDT Duration", 0.1, 5, 1.5, function(v) HDT_DURATION = tonumber(v) or 1.5 end)
-        mkInput(tab, "Walk speed (studs/s)", "8", "8", function(v) Dspeed = tonumber(v) or 8 end)
-        mkInput(tab, "Delay before walk (0 = instant)", "0", "0", function(v) Ddelay = tonumber(v) or 0 end)
-        HDT_CooldownPara = mkParagraph(tab, "Cooldown: Ready", "")
-        mkSection(tab, "Exploits")
-        mkButton(tab, "Fake Lag Tech", function()
+    local L = Tabs.Techs:AddGroupbox({ Side = "Left", Name = "HDT", IconName = "wrench" })
+    L:AddToggle("HDTToggle", { Text = "HDT (walk into killer on block)", Default = false, Callback = function(v) hitboxDraggingTech = v end })
+    L:AddSlider("HDTDurationSlider", {
+        Text = "HDT Duration", Default = 1.5, Min = 0.1, Max = 5, Rounding = 1,
+        Callback = function(v) HDT_DURATION = tonumber(v) or 1.5 end,
+    })
+    L:AddInput("HDTSpeedInput", {
+        Text = "Walk speed (studs/s)", Default = "8", Placeholder = "8", Numeric = true, Finished = true,
+        Callback = function(v) Dspeed = tonumber(v) or 8 end,
+    })
+    L:AddInput("HDTDelayInput", {
+        Text = "Delay before walk (0 = instant)", Default = "0", Placeholder = "0", Numeric = true, Finished = true,
+        Callback = function(v) Ddelay = tonumber(v) or 0 end,
+    })
+    L:AddLabel("HDTCooldownLabel", { Text = "Cooldown: Ready", DoesWrap = true })
+
+    local R = Tabs.Techs:AddGroupbox({ Side = "Right", Name = "Exploits", IconName = "zap" })
+    R:AddButton({
+        Text = "Fake Lag Tech",
+        Func = function()
             pcall(function()
                 local char = lp.Character or lp.CharacterAdded:Wait()
                 local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -1686,106 +1724,103 @@ do
                 a.AnimationId = "rbxassetid://136252471123500"
                 anim:LoadAnimation(a):Play()
             end)
-        end)
-    end
-end
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if HDT_CooldownPara then
-            local remaining = BLOCK_COOLDOWN - (tick() - lastBlockFireTime)
-            if lastBlockFireTime > 0 and remaining > 0 and remaining <= BLOCK_COOLDOWN then
-                setPara(HDT_CooldownPara, string.format("Cooldown: %.1fs", remaining), "")
-            else
-                setPara(HDT_CooldownPara, "Cooldown: Ready", "")
-            end
-        end
-    end
-end)
-
--- 9) GENERATOR
-do
-    local tab = makeTab("Generator", ICON)
-    if tab then
-        mkSection(tab, "Auto Generator")
-        mkToggle(tab, "Auto Generator", false, function(v) autoGenEnabled = v end)
-        mkSlider(tab, "Cooldown Between Completions", 1.5, 8, 4, function(v) autoGenCooldown = v end)
-        mkToggle(tab, "Speed Up When Nobody's Near", false, function(v) autoGenSpeedUp = v end)
-        mkSection(tab, "Grid Override")
-        mkToggle(tab, "Override Grid Size", false, function(v) autoGenGridOverride = v end)
-        mkSlider(tab, "Grid Size", 4, 12, 6, function(v) autoGenGridSize = v; autoGenCurrentGrid = v end)
-    end
+        end,
+    })
 end
 
--- 10) STAM
+-- ============================================================
+-- GENERATOR
+-- ============================================================
 do
-    local tab = makeTab("Stam", ICON)
-    if tab then
-        mkSection(tab, "Stamina")
-        mkToggle(tab, "Infinite Stamina", false, function(v)
+    local L = Tabs.Generator:AddGroupbox({ Side = "Left", Name = "Auto Generator", IconName = "zap" })
+    L:AddToggle("AutoGenToggle", { Text = "Auto Generator", Default = false, Callback = function(v) autoGenEnabled = v end })
+    L:AddSlider("AutoGenCooldownSlider", {
+        Text = "Cooldown Between Completions", Default = 4, Min = 1.5, Max = 8, Rounding = 1,
+        Callback = function(v) autoGenCooldown = v end,
+    })
+    L:AddToggle("AutoGenSpeedUpToggle", { Text = "Speed Up When Nobody's Near", Default = false, Callback = function(v) autoGenSpeedUp = v end })
+
+    local R = Tabs.Generator:AddGroupbox({ Side = "Right", Name = "Grid Override", IconName = "grid" })
+    R:AddToggle("GridOverrideToggle", { Text = "Override Grid Size", Default = false, Callback = function(v) autoGenGridOverride = v end })
+    R:AddSlider("GridSizeSlider", {
+        Text = "Grid Size", Default = 6, Min = 4, Max = 12, Rounding = 0,
+        Callback = function(v) autoGenGridSize = v; autoGenCurrentGrid = v end,
+    })
+end
+
+-- ============================================================
+-- STAM
+-- ============================================================
+do
+    local L = Tabs.Stam:AddGroupbox({ Side = "Left", Name = "Stamina", IconName = "activity" })
+    L:AddToggle("InfStamToggle", {
+        Text = "Infinite Stamina",
+        Default = false,
+        Callback = function(v)
             if v then setStamina()
             else
                 infinityStaminaActive = false
                 if staminaThread then task.cancel(staminaThread); staminaThread = nil end
             end
-        end)
-        mkSlider(tab, "Max Stamina",  1, 1000, maxStaminaValue,  function(v) maxStaminaValue  = v; sprintModule.MaxStamina  = v end)
-        mkSlider(tab, "Sprint Speed", 1, 30,   sprintSpeedValue, function(v) sprintSpeedValue = v; sprintModule.SprintSpeed = v end)
-        mkSection(tab, "Advanced")
-        mkSlider(tab, "Stamina Gain",  1, 1000, staminaGainValue,  function(v) staminaGainValue  = v; sprintModule.StaminaGain  = v end)
-        mkSlider(tab, "Stamina Drain", 0, 1000, staminaDrainValue, function(v) staminaDrainValue = v; sprintModule.StaminaDrain = v end)
-        mkSlider(tab, "Regen Delay",   0, 10,   regenDelayValue,   function(v) regenDelayValue   = v; sprintModule.StaminaRegenDelay = v end)
-    end
+        end,
+    })
+    L:AddSlider("MaxStaminaSlider", {
+        Text = "Max Stamina", Default = maxStaminaValue, Min = 1, Max = 1000, Rounding = 0,
+        Callback = function(v) maxStaminaValue = v; sprintModule.MaxStamina = v end,
+    })
+    L:AddSlider("SprintSpeedSlider", {
+        Text = "Sprint Speed", Default = sprintSpeedValue, Min = 1, Max = 30, Rounding = 0,
+        Callback = function(v) sprintSpeedValue = v; sprintModule.SprintSpeed = v end,
+    })
+
+    local R = Tabs.Stam:AddGroupbox({ Side = "Right", Name = "Advanced", IconName = "sliders" })
+    R:AddSlider("StamGainSlider", {
+        Text = "Stamina Gain", Default = staminaGainValue, Min = 1, Max = 1000, Rounding = 0,
+        Callback = function(v) staminaGainValue = v; sprintModule.StaminaGain = v end,
+    })
+    R:AddSlider("StamDrainSlider", {
+        Text = "Stamina Drain", Default = staminaDrainValue, Min = 0, Max = 1000, Rounding = 0,
+        Callback = function(v) staminaDrainValue = v; sprintModule.StaminaDrain = v end,
+    })
+    R:AddSlider("StamRegenSlider", {
+        Text = "Regen Delay", Default = regenDelayValue, Min = 0, Max = 10, Rounding = 2,
+        Callback = function(v) regenDelayValue = v; sprintModule.StaminaRegenDelay = v end,
+    })
 end
 
--- 11) MISC
+-- ============================================================
+-- MISC
+-- ============================================================
 do
-    local tab = makeTab("Misc", ICON)
-    if tab then
-        mkSection(tab, "Configuration")
-        mkButton(tab, "Save Config", function()
-            local ok = pcall(function() Rayfield:SaveConfig() end)
-            pcall(function()
-                Rayfield:Notify({
-                    Title = "Config",
-                    Content = ok and "Saved successfully" or "Save failed",
-                    Duration = 3,
-                })
-            end)
-        end)
-        mkButton(tab, "Load Config", function()
-            local ok = pcall(function() Rayfield:LoadConfig() end)
-            pcall(function()
-                Rayfield:Notify({
-                    Title = "Config",
-                    Content = ok and "Loaded successfully" or "Load failed",
-                    Duration = 3,
-                })
-            end)
-        end)
-        mkButton(tab, "Delete Config", function()
-            local ok = pcall(function() Rayfield:DeleteConfig() end)
-            pcall(function()
-                Rayfield:Notify({
-                    Title = "Config",
-                    Content = ok and "Deleted" or "Delete failed",
-                    Duration = 3,
-                })
-            end)
-        end)
+    local L = Tabs.Misc:AddGroupbox({ Side = "Left", Name = "Configuration", IconName = "save" })
+    L:AddLabel("ConfigNote", {
+        Text = "Config save/load/delete is available in the UI Settings tab (built-in SaveManager).",
+        DoesWrap = true,
+    })
 
-        mkSection(tab, "Chat & Lighting")
-        mkButton(tab, "Chat Visibility", function()
+    local L2 = Tabs.Misc:AddGroupbox({ Side = "Left", Name = "Chat & Lighting", IconName = "message-square" })
+    L2:AddButton({
+        Text = "Chat Visibility",
+        Func = function()
             if TextChatService:FindFirstChild("ChatWindowConfiguration") and TextChatService:FindFirstChild("ChatInputBarConfiguration") then
                 TextChatService.ChatWindowConfiguration.Enabled = true
                 TextChatService.ChatInputBarConfiguration.Enabled = true
             end
-        end)
-        local fullbrightOriginal = {}
-        mkToggle(tab, "Fullbright", false, function(v)
+        end,
+    })
+    local fullbrightOriginal = {}
+    L2:AddToggle("FullbrightToggle", {
+        Text = "Fullbright",
+        Default = false,
+        Callback = function(v)
             if v then
                 if not fullbrightOriginal.Ambient then
-                    fullbrightOriginal = { Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient, Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime }
+                    fullbrightOriginal = {
+                        Ambient = Lighting.Ambient,
+                        OutdoorAmbient = Lighting.OutdoorAmbient,
+                        Brightness = Lighting.Brightness,
+                        ClockTime = Lighting.ClockTime,
+                    }
                 end
                 Lighting.Ambient = Color3.new(1,1,1); Lighting.OutdoorAmbient = Color3.new(1,1,1)
                 Lighting.Brightness = 2; Lighting.ClockTime = 12
@@ -1793,10 +1828,13 @@ do
                 Lighting.Ambient = fullbrightOriginal.Ambient; Lighting.OutdoorAmbient = fullbrightOriginal.OutdoorAmbient
                 Lighting.Brightness = fullbrightOriginal.Brightness; Lighting.ClockTime = fullbrightOriginal.ClockTime
             end
-        end)
+        end,
+    })
 
-        mkSection(tab, "Performance")
-        mkButton(tab, "FPS Boost", function()
+    local R = Tabs.Misc:AddGroupbox({ Side = "Right", Name = "Performance", IconName = "gauge" })
+    R:AddButton({
+        Text = "FPS Boost",
+        Func = function()
             pcall(function()
                 local t = workspace:FindFirstChildOfClass("Terrain")
                 if t then t.WaterWaveSize = 0; t.WaterWaveSpeed = 0; t.WaterReflectance = 0; t.WaterTransparency = 0 end
@@ -1810,41 +1848,133 @@ do
                         v.Enabled = false
                     end
                 end
-                pcall(function() Rayfield:Notify({ Title = "FPS Boost", Content = "Successfully boosted FPS!", Duration = 3 }) end)
+                notify("FPS Boost", "Successfully boosted FPS!", 3)
             end)
-        end)
-        mkButton(tab, "Clear Cache", function()
+        end,
+    })
+    R:AddButton({
+        Text = "Clear Cache",
+        Func = function()
             pcall(function()
                 for _, v in ipairs(workspace:GetChildren()) do
                     if v:IsA("Part") and v.Name == "AntiFlickZone" then v:Destroy() end
                 end
-                for killer, data in pairs(boxBlockActive) do
+                for _, data in pairs(boxBlockActive) do
                     if data.part and data.part.Parent then data.part:Destroy() end
                 end
                 boxBlockActive = {}
                 if gcinfo then collectgarbage("collect") end
-                pcall(function() Rayfield:Notify({ Title = "Cache Cleaner", Content = "Cleared!", Duration = 3 }) end)
+                notify("Cache Cleaner", "Cleared!", 3)
             end)
+        end,
+    })
+end
+
+-- ============================================================
+-- UI SETTINGS + ADDONS
+-- ============================================================
+do
+    local MenuGroup = Tabs["UI Settings"]:AddGroupbox({ Side = "Left", Name = "Menu", IconName = "wrench" })
+    MenuGroup:AddToggle("KeybindMenuOpen", {
+        Default = Library.KeybindFrame and Library.KeybindFrame.Visible or false,
+        Text = "Open Keybind Menu",
+        Callback = function(v) if Library.KeybindFrame then Library.KeybindFrame.Visible = v end end,
+    })
+    MenuGroup:AddToggle("ShowCustomCursor", {
+        Text = "Custom Cursor",
+        Default = Library.ShowCustomCursor,
+        Callback = function(v) Library.ShowCustomCursor = v end,
+    })
+    MenuGroup:AddToggle("AlwaysOnTop", {
+        Text = "Always On Top",
+        Default = false,
+        Callback = function(v) pcall(function() Window:SetAlwaysOnTop(v) end) end,
+    })
+    MenuGroup:AddDropdown("NotificationSide", {
+        Values = { "Left", "Right" },
+        Default = "Right",
+        Text = "Notification Side",
+        Callback = function(v) pcall(function() Library:SetNotifySide(v) end) end,
+    })
+    MenuGroup:AddDropdown("DPIDropdown", {
+        Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+        Default = "100%",
+        Text = "DPI Scale",
+        Callback = function(v)
+            v = v:gsub("%%", "")
+            pcall(function() Library:SetDPIScale(tonumber(v)) end)
+        end,
+    })
+    MenuGroup:AddSlider("UICornerSlider", {
+        Text = "Corner Radius",
+        Default = Library.CornerRadius or 8,
+        Min = 0,
+        Max = 20,
+        Rounding = 0,
+        Callback = function(v) pcall(function() Window:SetCornerRadius(v) end) end,
+    })
+    MenuGroup:AddDivider()
+    MenuGroup:AddLabel("Menu bind")
+        :AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
+    MenuGroup:AddButton({
+        Text = "Unload",
+        Func = function() Library:Unload() end,
+    })
+    Library.ToggleKeybind = Options.MenuKeybind
+
+    -- Addons
+    if ThemeManager then
+        pcall(function()
+            ThemeManager:SetLibrary(Library)
+            ThemeManager:SetFolder("Slashsaken")
+            ThemeManager:ApplyToTab(Tabs["UI Settings"])
+        end)
+    end
+    if SaveManager then
+        pcall(function()
+            SaveManager:SetLibrary(Library)
+            SaveManager:IgnoreThemeSettings()
+            SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+            SaveManager:SetFolder("Slashsaken")
+            SaveManager:BuildConfigSection(Tabs["UI Settings"])
+            SaveManager:LoadAutoloadConfig()
         end)
     end
 end
 
--- 12) UI SETTINGS
-do
-    local tab = makeTab("UI Settings", ICON)
-    if tab then
-        mkSection(tab, "Menu")
-        pcall(function()
-            tab:CreateKeybind({
-                Name = "Toggle Menu",
-                CurrentKeybind = "RightShift",
-                HoldToInteract = false,
-                Callback = function() end,
-            })
-        end)
-        mkButton(tab, "Unload", function() pcall(function() Rayfield:Destroy() end) end)
+-- ============================================================
+-- POST-UI: label update loops
+-- ============================================================
+task.spawn(function()
+    while task.wait(1) do
+        local nA, nS = 0, 0
+        for _ in pairs(aimAbilityAnimIds)  do nA += 1 end
+        for _ in pairs(aimAbilitySoundIds) do nS += 1 end
+        local char = lp.Character
+        local name = char and (char:GetAttribute("CharacterName") or char.Name) or "?"
+        setLabel("AimInfoLabel", string.format("%s — %d anim / %d sound loaded", name, nA, nS))
     end
-end
+end)
+
+task.spawn(function()
+    while task.wait(2) do
+        setLabel("NoliStatusLabel",
+            noliConfig and "Noli config: loaded ✓"
+                        or "Noli config: not found (executor may not support 'require')")
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local remaining = BLOCK_COOLDOWN - (tick() - lastBlockFireTime)
+        if lastBlockFireTime > 0 and remaining > 0 and remaining <= BLOCK_COOLDOWN then
+            setLabel("HDTCooldownLabel", string.format("Cooldown: %.1fs", remaining))
+        else
+            setLabel("HDTCooldownLabel", "Cooldown: Ready")
+        end
+    end
+end)
 
 -- ============================================================
 -- GAME LOGIC LOOPS
@@ -1918,9 +2048,6 @@ task.spawn(function()
     lp.CharacterAdded:Connect(function() task.wait(0.9); connect() end)
 end)
 
--- ============================================================
--- AUTO BLOCK — Anim trigger
--- ============================================================
 RunService.RenderStepped:Connect(function()
     if not autoBlockOn then return end
     if blockTriggerMode ~= "Anim" and blockTriggerMode ~= "Both" then return end
@@ -1971,9 +2098,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ============================================================
--- AIM PUNCH
--- ============================================================
 RunService.RenderStepped:Connect(function()
     local aimPunch = MyAnimLockOn or aimPunchToggles["Character Lock"]
     local camLock  = aimPunchToggles["Camera Lock"]
