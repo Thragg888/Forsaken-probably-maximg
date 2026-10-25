@@ -1,4 +1,4 @@
--- Slashsaken — Fork of Forsaken Plus by Naiko Scripts
+-- Larp Hub — Fork of Forsaken Plus by Naiko Scripts
 -- WindUI · 27s global cooldown · HDT-on-block · stun-only Survivor Aim · by Viltrumite
 -- Copies of this script must contain the original credits and remain open source.
 
@@ -6,10 +6,10 @@ if workspace.DistributedGameTime < 4 then
     task.wait(4 - workspace.DistributedGameTime)
 end
 
-if game.CoreGui:FindFirstChild("Slashsaken") then
-    return warn("Script already running")
+if game.CoreGui:FindFirstChild("LarpHub") then
+    return warn("Larp Hub already running")
 elseif game.GameId == 6331902150 or game.GameId == 7464167604 or workspace:GetAttribute("ServerType") then
-    Instance.new("BoolValue", game.CoreGui).Name = "Slashsaken"
+    Instance.new("BoolValue", game.CoreGui).Name = "LarpHub"
 else
     return warn("Incorrect game")
 end
@@ -19,10 +19,209 @@ game:GetService("Players").LocalPlayer.Idled:Connect(function()
 end)
 
 -- ============================================================
--- Services & state
+-- Character Selection GUI (loads BEFORE main hub)
 -- ============================================================
-Version     = "3.10"
-BrandName   = "Slashsaken"
+local function ShowCharacterSelect()
+    local Players = game:GetService("Players")
+    local LP = Players.LocalPlayer
+    local CoreGui = game:GetService("CoreGui")
+    local SoundService = game:GetService("SoundService")
+    local Debris = game:GetService("Debris")
+    local TweenService = game:GetService("TweenService")
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "LarpHubSelect"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 999
+    screenGui.Parent = CoreGui
+
+    local frame = Instance.new("Frame")
+    frame.Name = "MainFrame"
+    frame.Size = UDim2.new(0, 340, 0, 240)
+    frame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.fromRGB(18, 16, 26)
+    frame.BackgroundTransparency = 1
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 14)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(140, 60, 220)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.3
+    stroke.Parent = frame
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 22, 55)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 12, 24)),
+    }
+    gradient.Rotation = 90
+    gradient.Parent = frame
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -30, 0, 44)
+    title.Position = UDim2.new(0, 15, 0, 12)
+    title.BackgroundTransparency = 1
+    title.Text = "What do you larp as?"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 20
+    title.TextColor3 = Color3.fromRGB(240, 235, 255)
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    title.TextTransparency = 1
+    title.Parent = frame
+
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Size = UDim2.new(1, -30, 0, 18)
+    subtitle.Position = UDim2.new(0, 15, 0, 54)
+    subtitle.BackgroundTransparency = 1
+    subtitle.Text = "Larp Hub · by Viltrumite"
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.TextSize = 12
+    subtitle.TextColor3 = Color3.fromRGB(140, 120, 200)
+    subtitle.TextXAlignment = Enum.TextXAlignment.Center
+    subtitle.TextTransparency = 1
+    subtitle.Parent = frame
+
+    local buttonHolder = Instance.new("Frame")
+    buttonHolder.Size = UDim2.new(1, -30, 1, -100)
+    buttonHolder.Position = UDim2.new(0, 15, 0, 82)
+    buttonHolder.BackgroundTransparency = 1
+    buttonHolder.Parent = frame
+
+    local grid = Instance.new("UIGridLayout")
+    grid.CellSize = UDim2.new(0.5, -6, 0.5, -6)
+    grid.CellPadding = UDim2.new(0, 12, 0, 12)
+    grid.SortOrder = Enum.SortOrder.LayoutOrder
+    grid.Parent = buttonHolder
+
+    local characters = {
+        { name = "Yuji",   soundId = "rbxassetid://107474185649543", accent = Color3.fromRGB(200, 60, 60) },
+        { name = "Gojo",   soundId = "rbxassetid://17788791704",     accent = Color3.fromRGB(100, 180, 255) },
+        { name = "Ryu",    soundId = "rbxassetid://103663607645533", accent = Color3.fromRGB(220, 160, 60) },
+        { name = "Mahito", soundId = "rbxassetid://102106514219992", accent = Color3.fromRGB(140, 60, 180) },
+    }
+
+    local chosenEvent = Instance.new("BindableEvent")
+    local buttons = {}
+
+    for i, char in ipairs(characters) do
+        local btn = Instance.new("TextButton")
+        btn.Name = char.name
+        btn.LayoutOrder = i
+        btn.BackgroundColor3 = Color3.fromRGB(35, 28, 55)
+        btn.BorderSizePixel = 0
+        btn.Text = char.name
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 18
+        btn.TextColor3 = Color3.fromRGB(230, 225, 255)
+        btn.AutoButtonColor = false
+        btn.BackgroundTransparency = 1
+        btn.TextTransparency = 1
+        btn.Parent = buttonHolder
+
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, 8)
+        c.Parent = btn
+
+        local s = Instance.new("UIStroke")
+        s.Color = char.accent
+        s.Thickness = 1
+        s.Transparency = 0.4
+        s.Parent = btn
+
+        btn.MouseEnter:Connect(function()
+            if btn.Active then
+                TweenService:Create(btn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = Color3.fromRGB(55, 42, 85),
+                    BackgroundTransparency = 0,
+                }):Play()
+                TweenService:Create(s, TweenInfo.new(0.15), {Transparency = 0}):Play()
+            end
+        end)
+        btn.MouseLeave:Connect(function()
+            if btn.Active then
+                TweenService:Create(btn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = Color3.fromRGB(35, 28, 55),
+                    BackgroundTransparency = 0,
+                }):Play()
+                TweenService:Create(s, TweenInfo.new(0.15), {Transparency = 0.4}):Play()
+            end
+        end)
+
+        buttons[char.name] = btn
+
+        btn.MouseButton1Click:Connect(function()
+            for _, b in pairs(buttons) do
+                b.Active = false
+                b.AutoButtonColor = false
+            end
+            title.Text = "Loading as " .. char.name .. "..."
+            subtitle.Text = "Playing sound..."
+
+            local sound = Instance.new("Sound")
+            sound.SoundId = char.soundId
+            sound.Volume = 1
+            sound.Parent = SoundService
+            pcall(function() sound:Play() end)
+            Debris:AddItem(sound, 30)
+
+            task.spawn(function()
+                -- Wait briefly for the sound to start (or fail-fast if invalid)
+                local start = tick()
+                while not sound.IsPlaying and tick() - start < 1.5 do
+                    task.wait(0.05)
+                end
+                -- Give it 0.6s so the user actually hears it begin
+                task.wait(0.6)
+
+                -- Fade out the selection GUI
+                TweenService:Create(frame, TweenInfo.new(0.35), {
+                    BackgroundTransparency = 1,
+                }):Play()
+                for _, gui in frame:GetDescendants() do
+                    if gui:IsA("TextLabel") or gui:IsA("TextButton") then
+                        TweenService:Create(gui, TweenInfo.new(0.35), {TextTransparency = 1}):Play()
+                    elseif gui:IsA("UIStroke") then
+                        TweenService:Create(gui, TweenInfo.new(0.35), {Transparency = 1}):Play()
+                    end
+                end
+                task.wait(0.4)
+                screenGui:Destroy()
+                chosenEvent:Fire(char.name)
+            end)
+        end)
+    end
+
+    -- Fade in
+    task.spawn(function()
+        TweenService:Create(frame, TweenInfo.new(0.3), {BackgroundTransparency = 0}):Play()
+        TweenService:Create(title, TweenInfo.new(0.3), {TextTransparency = 0}):Play()
+        TweenService:Create(subtitle, TweenInfo.new(0.3), {TextTransparency = 0}):Play()
+        for _, b in pairs(buttons) do
+            TweenService:Create(b, TweenInfo.new(0.3), {BackgroundTransparency = 0, TextTransparency = 0}):Play()
+        end
+    end)
+
+    return chosenEvent.Event
+end
+
+-- Block until user picks a character + sound starts playing
+local chosenEvent = ShowCharacterSelect()
+local characterChoice = chosenEvent:Wait()
+print("[Larp Hub] User larping as: " .. tostring(characterChoice))
+
+-- ============================================================
+-- Main Larp Hub
+-- ============================================================
+Version     = "3.40"
+BrandName   = "Larp Hub"
 AuthorName  = "Viltrumite"
 
 Players            = game:GetService("Players")
@@ -73,18 +272,18 @@ local fireproximitypromptFn = rawget(getfenv(), "fireproximityprompt") or rawget
 local firesignalFn = rawget(getfenv(), "firesignal") or rawget(getfenv(), "fire_signal")
 ColorPresets = {White=Color3.fromRGB(255,255,255), Teal=Color3.fromRGB(3,252,157), Green=Color3.fromRGB(0,255,0), Purple=Color3.fromRGB(158,0,179), Red=Color3.fromRGB(255,0,0), Blue=Color3.fromRGB(0,0,255), Cyan=Color3.fromRGB(0,255,255), Gold=Color3.fromRGB(255,215,0), Orange=Color3.fromRGB(255,165,0)}
 
--- Facing check state (built into Auto Block)
 detectionRange  = 18
 customFacingDot = 0.3
 facingVisuals   = {}
 
--- HDT state
 HDT_Enabled     = false
 HDT_Speed       = 5.6
 HDT_Delay       = 0
+HDT_Duration    = 1.5
 HDT_Debounce    = false
 
--- Survivor Aim state
+AutoBlock_Debug = false
+
 SurvivorAim_Enabled    = false
 SurvivorAim_CharLock   = true
 SurvivorAim_CamLock    = false
@@ -94,15 +293,13 @@ SurvivorAim_Smoothness = 0.15
 SurvivorAim_LastTrigger = 0
 SurvivorAim_Cooldown   = 0.5
 
--- Survivor STUN-only ability names (lowercase, no spaces)
--- Source: Forsaken Wiki — only abilities that apply a Stun status to the killer
 SurvivorAimAbilities = {
-    ["slash"]            = true,  -- Shedletsky   · 3s stun
-    ["punch"]            = true,  -- Guest 1337   · 2s stun
-    ["parry"]            = true,  -- Guest 1337   · 3.5s stun (Parry Punch)
-    ["oneshot"]          = true,  -- Chance       · 1–5s stun (distance scaled)
-    ["sacrificialdagger"]= true,  -- Two Time     · 3.5s stun (backstab)
-    ["resonancehatchet"] = true,  -- Jane Doe     · stun / anim interrupt
+    ["slash"]            = true,
+    ["punch"]            = true,
+    ["parry"]            = true,
+    ["oneshot"]          = true,
+    ["sacrificialdagger"]= true,
+    ["resonancehatchet"] = true,
 }
 
 local function Track(conn)
@@ -110,9 +307,6 @@ local function Track(conn)
     return conn
 end
 
--- ============================================================
--- Helpers
--- ============================================================
 function GetValue(name, instanceOnly)
     local inst = Values[name]
     if not inst then inst = PlusFolderSettings:FindFirstChild(name, true); Values[name] = inst end
@@ -145,12 +339,22 @@ function PlaySound(SoundName, Settings)
     end
 end
 
--- ============================================================
--- Animation-name resolution (Forsaken Plus method)
--- ============================================================
 function PopulateAnimations()
-    if not IsRequireSupported then return end
-    if not (KillerAssets and SurvivorAssets and SkinsAssets) then return end
+    if not IsRequireSupported then
+        warn("[Larp Hub] Require not supported — Auto Block and Survivor Aim will not fire.")
+        return
+    end
+    if not (KillerAssets and SurvivorAssets and SkinsAssets) then
+        warn("[Larp Hub] Asset folders missing — cannot populate animations.")
+        return
+    end
+
+    local waited = 0
+    while waited < 30 do
+        if KillerAssets:FindFirstChild("Config", true) then break end
+        task.wait(0.5)
+        waited = waited + 0.5
+    end
 
     local configs = {}
     for _, v in KillerAssets:QueryDescendants("ModuleScript#Config") do table.insert(configs, v) end
@@ -184,8 +388,16 @@ function PopulateAnimations()
 
     local count = 0
     for _ in pairs(AnimationIdToName) do count = count + 1 end
+    print(string.format("[Larp Hub] Loaded %d animation IDs from %d configs.", count, #configs))
     if count == 0 then
-        warn("[Slashsaken] Could not load animation configs — Auto Block and Survivor Aim will not fire.")
+        warn("[Larp Hub] Could not load animation configs — Auto Block and Survivor Aim will not fire.")
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "Larp Hub Warning",
+                Text = "Animation configs failed to load. Auto Block and Survivor Aim are inactive.",
+                Duration = 10,
+            })
+        end)
     end
 end
 
@@ -196,9 +408,6 @@ function GetAnimationType(ID)
     return nil
 end
 
--- ============================================================
--- Facing check (always enforced inside AutoBlock)
--- ============================================================
 function isFacing(localRoot, targetRoot)
     if not (localRoot and targetRoot) then return true end
     local dx = localRoot.Position.X - targetRoot.Position.X
@@ -269,15 +478,12 @@ Track(RunService.Heartbeat:Connect(function()
     end
 end))
 
--- ============================================================
--- Killer lookup
--- ============================================================
 function getNearestKillerModel()
     local myRoot = LocalCharacter and LocalCharacter:FindFirstChild("HumanoidRootPart")
     if not myRoot or not KillersFolder then return nil end
     local closest, closestDist = nil, math.huge
     for _, k in KillersFolder:GetChildren() do
-        if k and k:IsA("Model") then
+        if k and k:IsA("Model") and Players:GetPlayerFromCharacter(k) ~= LocalPlayer then
             local hrp = k:FindFirstChild("HumanoidRootPart")
             if hrp then
                 local d = (hrp.Position - myRoot.Position).Magnitude
@@ -294,7 +500,7 @@ function getKillerHRP(killerModel)
 end
 
 -- ============================================================
--- HDT (only triggers when block fires)
+-- HDT — direct AssemblyLinearVelocity (nexeralt method)
 -- ============================================================
 function StartHDT(killer)
     if not HDT_Enabled or HDT_Debounce then return end
@@ -315,28 +521,33 @@ function StartHDT(killer)
     local oldJP = hum.JumpPower
     local oldPS = hum.PlatformStand
     local oldAR = hum.AutoRotate
+    local oldVelY = hrp.AssemblyLinearVelocity.Y
 
     hum.WalkSpeed = 0
     hum.JumpPower = 0
     hum.PlatformStand = false
     hum.AutoRotate = false
 
-    local bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(1e5, 0, 1e5)
-    bv.Velocity = Vector3.new(0, 0, 0)
-    bv.Parent = hrp
-
     if HDT_Delay > 0 then task.wait(HDT_Delay) end
+
+    local startTime = tick()
 
     local conn
     conn = RunService.Heartbeat:Connect(function()
         if not HDT_Debounce or not HDT_Enabled then
             conn:Disconnect()
-            if bv and bv.Parent then pcall(function() bv:Destroy() end) end
+            if hrp and hrp.Parent then
+                pcall(function() hrp.AssemblyLinearVelocity = Vector3.new(0, oldVelY, 0) end)
+            end
             if char and char.Parent and hum and hum.Parent then
                 hum.WalkSpeed = oldWS; hum.JumpPower = oldJP
                 hum.PlatformStand = oldPS; hum.AutoRotate = oldAR
             end
+            return
+        end
+
+        if tick() - startTime >= HDT_Duration then
+            HDT_Debounce = false
             return
         end
 
@@ -352,7 +563,10 @@ function StartHDT(killer)
 
         if horiz.Magnitude > 0.1 then
             local dir = horiz.Unit
-            bv.Velocity = Vector3.new(dir.X * HDT_Speed, bv.Velocity.Y, dir.Z * HDT_Speed)
+            -- Direct velocity write — nexeralt hitbox extender method
+            pcall(function()
+                hrp.AssemblyLinearVelocity = Vector3.new(dir.X * HDT_Speed, hrp.AssemblyLinearVelocity.Y, dir.Z * HDT_Speed)
+            end)
             local lookAt = Vector3.new(currentRoot.Position.X, hrp.Position.Y, currentRoot.Position.Z)
             pcall(function() hrp.CFrame = CFrame.lookAt(hrp.Position, lookAt) end)
         end
@@ -360,14 +574,15 @@ function StartHDT(killer)
         if toTarget.Magnitude <= 2.5 then HDT_Debounce = false end
     end)
 
-    task.delay(1.5 + HDT_Delay, function() if HDT_Debounce then HDT_Debounce = false end end)
+    task.delay(HDT_Duration + HDT_Delay + 0.1, function() if HDT_Debounce then HDT_Debounce = false end end)
 end
 
 -- ============================================================
--- Survivor Aim (stun-only, smooth Lerp)
+-- Survivor Aim
 -- ============================================================
 function DoSurvivorAim()
     if not SurvivorAim_Enabled then return end
+    if not LocalCharacter or LocalCharacter.Parent ~= SurvivorsFolder then return end
     if tick() - SurvivorAim_LastTrigger < SurvivorAim_Cooldown then return end
 
     local char = LocalPlayer.Character
@@ -413,10 +628,11 @@ end
 
 local function SetupSurvivorAim(char)
     local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
-    local anim = hum and hum:FindFirstChildOfClass("Animator")
+    local anim = hum and (hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 5))
     if not anim then return end
     Track(anim.AnimationPlayed:Connect(function(track)
         if not SurvivorAim_Enabled then return end
+        if not LocalCharacter or LocalCharacter.Parent ~= SurvivorsFolder then return end
         local animName = GetAnimationType(track.Animation and track.Animation.AnimationId or "")
         if not animName then return end
         local lower = animName:lower():gsub("%s", "")
@@ -426,9 +642,6 @@ local function SetupSurvivorAim(char)
     end))
 end
 
--- ============================================================
--- Compat detection
--- ============================================================
 task.spawn(function()
     local ok, r = pcall(function()
         return require(ReplicatedStorage:WaitForChild("Systems", 4):WaitForChild("Character", 4):WaitForChild("Game", 4):WaitForChild("Sprinting", 4))
@@ -463,9 +676,6 @@ local Window = WindUI:CreateWindow({
     ToggleKey  = Enum.KeyCode.RightShift,
 })
 
--- ============================================================
--- UI helper wrappers (with instance ↔ toggle sync)
--- ============================================================
 local function MakeToggle(parent, name, data)
     local inst = Instance.new("BoolValue")
     inst.Name = name
@@ -558,9 +768,6 @@ local function MakeDropdown(parent, name, data)
     })
 end
 
--- ============================================================
--- Create all tabs first (synchronous — no race conditions)
--- ============================================================
 local Tabs = {}
 local TabConfigs = {
     { key = "Notice",      title = "Notice",          icon = "info" },
@@ -586,12 +793,12 @@ end
 -- ============================================================
 local NoticeSection = Tabs.Notice:Section({ Title = "Welcome", Opened = true })
 NoticeSection:Paragraph({
-    Title = "Slashsaken v" .. Version .. " by " .. AuthorName,
-    Desc  = "Auto Block fires only on blockable basic attacks (slash/stab/attack/etc.). Facing check is built-in. Block cooldown 27s. HDT triggers on block.",
+    Title = "Larp Hub v" .. Version .. " · larping as " .. tostring(characterChoice),
+    Desc  = "Auto Block fires only on blockable basic attacks. Facing check built-in. 27s global cooldown. HDT triggers on block.",
 })
 NoticeSection:Paragraph({
     Title = "Survivor Aim — stun-only",
-    Desc  = "Smoothly aims at killer when you use a STUN ability: Shedletsky Slash · Guest Punch/Parry · Chance One Shot · Two Time Sacrificial Dagger · Jane Doe Resonance Hatchet.",
+    Desc  = "Aims at killer when you use a STUN ability: Shedletsky Slash · Guest Punch/Parry · Chance One Shot · Two Time Sacrificial Dagger · Jane Doe Resonance Hatchet.",
 })
 
 -- ============================================================
@@ -730,7 +937,7 @@ MakeToggle(StamGB, "AntiSlowness", {
 })
 
 -- ============================================================
--- AUTO BLOCK — 27s GLOBAL cooldown, HDT on fire, no Auto Punch
+-- AUTO BLOCK
 -- ============================================================
 local BlockGB  = Tabs.AutoBlock:Section({ Title = "Blocking", Opened = true })
 local CircleGB = Tabs.AutoBlock:Section({ Title = "Facing Circle", Opened = true })
@@ -745,34 +952,56 @@ MakeToggle(BlockGB, "AutoBlock", {
 
         local BlockableAttacks = {"slash", "enragedslash", "stab", "attack", "punch", "swing", "golemslash"}
         local LEAD, COOLDOWN, SWEEP_WINDOW, SWEEP_MUL = 0.02, 27, 0.55, 2.5
-        local lastBlockAt = 0  -- GLOBAL, not per-killer
+        local lastBlockAt = 0
 
         local function SetupKiller(Killer)
+            if Players:GetPlayerFromCharacter(Killer) == LocalPlayer then return end
+
             local Hum = Killer:FindFirstChildOfClass("Humanoid") or Killer:WaitForChild("Humanoid", 5)
-            local Anim = Hum and Hum:FindFirstChildOfClass("Animator")
+            if not Hum then return end
+            local Anim = Hum:FindFirstChildOfClass("Animator") or Hum:WaitForChild("Animator", 5)
             if not Anim then return end
 
             local remote = Network and Network:FindFirstChildOfClass("RemoteEvent")
 
             local function DoBlock(currentTrack)
                 if not Killer or not Killer.Parent then return end
+                if not (LocalCharacter and LocalCharacter.Parent == SurvivorsFolder) then return end
+
+                local trigName = "?"
                 if currentTrack and currentTrack.Animation then
                     local curName = GetAnimationType(currentTrack.Animation.AnimationId)
                     if not curName or not table.find(BlockableAttacks, curName:lower()) then return end
+                    trigName = curName
                 end
                 local kr = Killer:FindFirstChild("HumanoidRootPart")
                 if not (kr and LocalRoot) then return end
                 if (kr.Position - LocalRoot.Position).Magnitude > detectionRange then return end
                 if not isFacing(LocalRoot, kr) then return end
 
+                local btn = MainUI and MainUI:FindFirstChild("AbilityContainer") and MainUI.AbilityContainer:FindFirstChild("Block")
+                if btn then
+                    local cdEl = btn:FindFirstChild("CooldownTime")
+                    if cdEl and cdEl.Text ~= "" and cdEl.Text ~= "0" then return end
+                end
+
                 if tick() - lastBlockAt < COOLDOWN then return end
                 lastBlockAt = tick()
 
-                local btn = MainUI and MainUI:FindFirstChild("AbilityContainer") and MainUI.AbilityContainer:FindFirstChild("Block")
                 if btn and btn.MouseButton1Click and firesignalFn then pcall(firesignalFn, btn.MouseButton1Click) end
                 if remote then
                     pcall(function() remote:FireServer("UseActorAbility", {"Block"}) end)
                     pcall(function() remote:FireServer("UseActorAbility", "Block") end)
+                end
+
+                if AutoBlock_Debug then
+                    pcall(function()
+                        StarterGui:SetCore("SendNotification", {
+                            Title = "Auto Block Fired",
+                            Text = "On: " .. trigName .. " · " .. Killer.Name,
+                            Duration = 2,
+                        })
+                    end)
                 end
 
                 task.spawn(function() StartHDT(Killer) end)
@@ -825,6 +1054,13 @@ MakeToggle(BlockGB, "AutoBlock", {
         Track(KillersFolder.ChildAdded:Connect(function(k) task.wait(0.5); SetupKiller(k) end))
         for _, k in KillersFolder:GetChildren() do task.spawn(SetupKiller, k) end
     end,
+})
+
+MakeToggle(BlockGB, "AutoBlockDebug", {
+    Title = "Auto Block Debug",
+    Desc = "Show a notification whenever Auto Block fires",
+    Default = false,
+    ScriptFunction = function(self, v) AutoBlock_Debug = v end,
 })
 
 MakeSlider(CircleGB, "FacingCircleRange", {
@@ -903,12 +1139,12 @@ MakeToggle(QTE_GB, "AutoDisarm", {
 })
 
 -- ============================================================
--- SURVIVOR AIM (STUN-ONLY)
+-- SURVIVOR AIM
 -- ============================================================
 local SurvAimGB = Tabs.SurvivorAim:Section({ Title = "Survivor Aim (Stun Abilities)", Opened = true })
 SurvAimGB:Paragraph({
     Title = "Stun-only aim",
-    Desc  = "Will only fire for abilities that stun: Slash · Punch · Parry · One Shot · Sacrificial Dagger · Resonance Hatchet.",
+    Desc  = "Fires only for: Slash · Punch · Parry · One Shot · Sacrificial Dagger · Resonance Hatchet.",
 })
 
 MakeToggle(SurvAimGB, "SurvivorAim", {
@@ -941,7 +1177,7 @@ MakeSlider(SurvAimGB, "SurvivorAimPrediction", {
     ScriptFunction = function(self, v) SurvivorAim_Prediction = tonumber(v) or 4 end,
 })
 MakeSlider(SurvAimGB, "SurvivorAimSmoothness", {
-    Title = "Aim Smoothness", Desc = "Lower = smoother (0.05 = very smooth, 0.3 = snappy)",
+    Title = "Aim Smoothness", Desc = "Lower = smoother",
     Min = 0.05, Max = 0.5, Step = 0.01, Default = 0.15,
     ScriptFunction = function(self, v) SurvivorAim_Smoothness = tonumber(v) or 0.15 end,
 })
@@ -974,7 +1210,7 @@ MakeToggle(AntiGB, "DisableKillerWalls", {
 })
 
 -- ============================================================
--- TECHS (HDT + Fake Lag)
+-- TECHS
 -- ============================================================
 local TechGB = Tabs.Techs:Section({ Title = "Hitbox Dragging Tech (HDT)", Opened = true })
 MakeToggle(TechGB, "HDT", {
@@ -991,6 +1227,11 @@ MakeSlider(TechGB, "HDTDelay", {
     Title = "HDT Delay (sec)", Desc = "Delay before HDT starts moving",
     Min = 0, Max = 1, Step = 0.05, Default = 0,
     ScriptFunction = function(self, v) HDT_Delay = tonumber(v) or 0 end,
+})
+MakeSlider(TechGB, "HDTDuration", {
+    Title = "HDT Duration (sec)", Desc = "Max seconds of drag",
+    Min = 0.2, Max = 5, Step = 0.1, Default = 1.5,
+    ScriptFunction = function(self, v) HDT_Duration = tonumber(v) or 1.5 end,
 })
 
 local FakeLagGB = Tabs.Techs:Section({ Title = "Fake Lag", Opened = true })
@@ -1270,7 +1511,7 @@ MenuGB:Button({
         table.clear(Connections)
         for k in pairs(facingVisuals) do removeFacingVisual(k) end
         if PlusFolderSettings then pcall(function() PlusFolderSettings:Destroy() end) end
-        local flag = CoreGui:FindFirstChild("Slashsaken")
+        local flag = CoreGui:FindFirstChild("LarpHub")
         if flag then flag:Destroy() end
         pcall(function() Window:Destroy() end)
     end,
@@ -1297,9 +1538,9 @@ OnCharacter(LocalCharacter or LocalPlayer.Character)
 -- ============================================================
 WindUI:Notify({
     Title = BrandName .. " · by " .. AuthorName,
-    Content = "v" .. Version .. " loaded. 27s global block cooldown · HDT on fire · stun-only Survivor Aim.",
+    Content = "v" .. Version .. " loaded · larping as " .. tostring(characterChoice) .. " · 27s block cooldown · HDT on fire (velocity-direct) · stun-only Survivor Aim.",
     Icon = "check-circle",
     Duration = 6,
 })
 
-print(BrandName .. " v" .. Version .. " by " .. AuthorName .. " — WindUI loaded.")
+print(BrandName .. " v" .. Version .. " — loaded. User is larping as " .. tostring(characterChoice) .. ".")
